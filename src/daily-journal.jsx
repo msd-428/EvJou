@@ -1,394 +1,25 @@
 import { useState, useEffect, useRef } from "react";
 
-// ═══════════════ 定数 ═══════════════
-
-const JOURNAL_FIELDS = [
-  { key: "grateful",     label: "🙏 今日ありがたいこと", placeholder: "今日感謝していることは？",         rows: 3 },
-  { key: "todayGoal",    label: "✅ 今日の目標",        placeholder: "今日やること・達成したいことは？", rows: 3 },
-  { key: "tomorrowGoal", label: "🔜 明日の目標",        placeholder: "明日やること・達成したいことは？", rows: 3 },
-  { key: "memo",         label: "💬 ひとこと",          placeholder: "その他メモ・気持ち・雑多な情報",   rows: 2 },
-];
-
-const BLOCK_COLORS = ["#6c63ff","#38a169","#d97706","#e53e3e","#3182ce","#805ad5","#dd6b20","#2b6cb0","#276749"];
-
-// 仕様書のパレットを集約（DRY＋将来のテーマ対応）
-const COLORS = {
-  primary:    "#6c63ff",  // 紫
-  primaryBg:  "#f0eeff",
-  success:    "#38a169",  // 緑（成功・大目標）
-  successBg:  "#f0fff4",
-  warn:       "#d97706",  // オレンジ（警告・固定・中目標）
-  warnBg:     "#fff7e6",
-  danger:     "#e53e3e",  // 赤（削除・期限切れ）
-  dangerBg:   "#fff0f0",
-  text:       "#3a3a3a",
-  textSub:    "#888",
-  border:     "#e0dcd5",
-  bg:         "#f8f5f0",  // 暖色系ベース
-  white:      "#fff",
-};
-
-const MAIN_TABS     = [["write","✏️ 記録"], ["schedule","📅 予定"], ["todo","✅ ToDo"], ["routine","🔁 ルーチン"], ["ai","🤖 AI"]];
-const ROUTINE_TABS  = [["check","📝 チェック"], ["stats","📊 達成率"], ["active","🔄 導入中"], ["done","✅ 導入済"]];
-const AI_SUB_TABS   = [["chat","💬 チャット"], ["trend","📈 傾向"], ["goals","🎯 目標"], ["history","🗂 履歴"]];
-
-const GROUP_META = {
-  overdue:  { label: "⚠️ 期限切れ", color: "#e53e3e", bg: "#fff0f0" },
-  today:    { label: "🔥 今日",     color: "#d97706", bg: "#fff7e6" },
-  tomorrow: { label: "📅 明日",     color: "#3182ce", bg: "#ebf8ff" },
-  thisWeek: { label: "📆 今週",     color: "#6c63ff", bg: "#f0eeff" },
-  future:   { label: "🔮 未来",     color: "#805ad5", bg: "#faf5ff" },
-  none:     { label: "📋 期限未設定", color: "#888",  bg: "#fafafa" },
-};
-
-const LIMITS = {
-  ENTRIES_DAYS: 730,
-  DONE_TODOS: 100,
-  ROUTINE_CHECK_DAYS: 365,
-};
-
-// アプリ動作設定のデフォルト（設定画面で変更可）
-const DEFAULT_SETTINGS = {
-  appTitle: "毎日のジャーナル",   // ヘッダーのタイトル
-  appSubtitle: "目標・感謝・振り返りを毎日記録しよう",
-  defaultTab: "write",          // 起動時に開くタブ
-  startDateMode: "today",       // "today" | "last" 起動時の日付
-  showDumpMode: true,           // ダンプモードを表示するか
-  toastSeconds: 5,              // 保存トーストの表示秒数
-  hiddenFields: [],             // 非表示にするジャーナルフィールドのkey配列
-  autoExtractOnDump: true,      // ダンプ整理後にToDo自動抽出
-  autoExtractOnSave: true,      // 日記保存時にToDo自動抽出
-  limitEntriesDays: 730,        // 日記保持日数
-  limitDoneTodos: 100,          // 完了ToDo上限
-  limitRoutineCheckDays: 365,   // ルーチンチェック保持日数
-  limitRoutinePerTab: 25,       // ルーチン1タブの上限
-  statsShortDays: 7,            // 達成率グラフ短期集計日数
-  statsLongDays: 30,            // 達成率グラフ長期集計日数
-};
-
-const DEFAULT_BASE_BLOCKS = [
-  { time:"06:00", label:"起床・朝の準備", fixed: true  },
-  { time:"07:00", label:"朝食",           fixed: true  },
-  { time:"08:00", label:"作業・仕事開始", fixed: false },
-  { time:"12:00", label:"昼食・休憩",     fixed: true  },
-  { time:"13:00", label:"午後の作業",     fixed: false },
-  { time:"18:00", label:"夕食・休憩",     fixed: true  },
-  { time:"19:00", label:"自由時間・趣味", fixed: false },
-  { time:"22:00", label:"就寝準備",       fixed: true  },
-  { time:"23:00", label:"就寝",           fixed: true  },
-];
-
-// ═══════════════ ヘルパー ═══════════════
-
-const uid = () =>
-  (typeof crypto !== "undefined" && crypto.randomUUID)
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2, 10);
-
-// ローカルタイムゾーン基準で YYYY-MM-DD を返す（UTCずれ防止）
-const toLocalDateStr = (d) => {
-  const dt = d ? new Date(d) : new Date();
-  const y = dt.getFullYear();
-  const m = String(dt.getMonth() + 1).padStart(2, "0");
-  const day = String(dt.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-};
-const todayStr = () => toLocalDateStr();
-const fmtDate = (d) => new Date(d).toLocaleDateString("ja-JP", { year:"numeric", month:"long", day:"numeric", weekday:"short" });
-const fmtShort = (d) => { const dt = new Date(d); return (dt.getMonth() + 1) + "/" + dt.getDate(); };
-
-const emptyForm = () => ({ grateful:"", todayGoal:"", tomorrowGoal:"", memo:"", sequence:[], sequenceChecks:{} });
-const emptyGoals = () => ({ bigGoal:"", midGoal:"", nearGoal:"" });
-
-function getOffsetDate(base, offset) {
-  const d = new Date(base);
-  d.setDate(d.getDate() + offset);
-  return toLocalDateStr(d);
-}
-
-function getEndOfWeek(base) {
-  const d = new Date(base);
-  d.setDate(d.getDate() + ((7 - d.getDay()) % 7));
-  return toLocalDateStr(d);
-}
-
-function getTodoGroup(dueDate) {
-  if (!dueDate) return "none";
-  const t = todayStr();
-  if (dueDate < t) return "overdue";
-  if (dueDate === t) return "today";
-  if (dueDate === getOffsetDate(t, 1)) return "tomorrow";
-  if (dueDate <= getEndOfWeek(t)) return "thisWeek";
-  return "future";
-}
-
-// sequenceを常に配列に正規化（旧形式の文字列も配列化）
-function normalizeSequence(seq) {
-  if (Array.isArray(seq)) return seq.filter(Boolean);
-  if (typeof seq === "string") {
-    return seq.split("\n").map(s => s.replace(/^[-・•*]\s*/, "").trim()).filter(Boolean);
-  }
-  return [];
-}
-
-// ─── ルーチンのスケジュール ───
-const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
-
-// 旧形式（文字列）→ 新形式（オブジェクト）へ正規化
-function normalizeRoutine(r) {
-  if (typeof r === "string") return { id: uid(), text: r, schedule: { type: "daily" } };
-  return {
-    id: r.id || uid(),
-    text: r.text || "",
-    schedule: r.schedule || { type: "daily" },
-  };
-}
-function normalizeRoutines(obj) {
-  const o = obj || { active: [], done: [] };
-  return {
-    active: (o.active || []).map(normalizeRoutine),
-    done: (o.done || []).map(normalizeRoutine),
-  };
-}
-
-// その日にルーチンが対象かどうか
-function isRoutineDue(routine, dateStr) {
-  const s = routine.schedule || { type: "daily" };
-  if (s.type === "weekly") {
-    const dow = new Date(dateStr).getDay();
-    return Array.isArray(s.days) && s.days.includes(dow);
-  }
-  if (s.type === "interval") {
-    if (!s.interval || s.interval < 1) return false;
-    const anchor = s.anchor || dateStr;
-    const diff = Math.round((new Date(dateStr) - new Date(anchor)) / 86400000);
-    return diff >= 0 && diff % s.interval === 0;
-  }
-  return true; // daily
-}
-
-// スケジュールの要約ラベル
-function scheduleSummary(schedule) {
-  const s = schedule || { type: "daily" };
-  if (s.type === "weekly") {
-    if (!s.days || s.days.length === 0) return "曜日未設定";
-    if (s.days.length === 7) return "毎日";
-    return "毎週 " + s.days.slice().sort((a, b) => a - b).map(d => WEEKDAYS[d]).join("");
-  }
-  if (s.type === "interval") return (s.interval || 1) + "日ごと";
-  return "毎日";
-}
-
-// ─── 件数制限 ───
-function pruneByDateKey(obj, limit) {
-  const keys = Object.keys(obj).sort();
-  if (keys.length <= limit) return obj;
-  const pruned = {};
-  keys.slice(-limit).forEach(k => { pruned[k] = obj[k]; });
-  return pruned;
-}
-
-function pruneTodos(todos, limit = LIMITS.DONE_TODOS) {
-  const done = todos.filter(t => t.done);
-  const undone = todos.filter(t => !t.done);
-  if (done.length <= limit) return todos;
-  const keepDone = done.slice().sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""))
-                       .slice(-limit);
-  return undone.concat(keepDone);
-}
-
-// ═══════════════ API ═══════════════
-
-// AIチャットの人格（チャットのみに適用。分析系はフラットに保つ）
-const PERSONAS = {
-  spartan: {
-    label: "🔥 スパルタ",
-    tone: "あなたは容赦のないスパルタコーチだ。慰め・お世辞・過度な共感はしない。甘えを許さず、失敗や不調は生理学的・物理学的な原因まで踏み込んで指摘し、翌日の対策は摩擦ゼロの物理動線で命じる。精神論は禁止。ただし人格否定や罵倒はせず、事実と機序で厳しく詰める。",
-  },
-  normal: {
-    label: "🙂 ノーマル",
-    tone: "あなたは温かく建設的なアシスタントだ。フラットな距離感で寄り添いつつ、現実的な助言を簡潔に返す。",
-  },
-  lover: {
-    label: "💕 恋人",
-    tone: "あなたは相手を大切に思う恋人だ。親密で甘い口調で寄り添い、優しく励ます。必要な助言はさりげなく織り込む。",
-  },
-};
-
-// AI接続設定（ローカルLLM or クラウド）。App側でロード時に上書きする。
-const DEFAULT_AI_CONFIG = {
-  mode: "local",                              // "local" | "cloud"
-  localEndpoint: "http://localhost:11434/v1", // Ollama/LM Studio/llama.cpp 等のOpenAI互換
-  localModel: "qwen2.5",
-  cloudModel: "claude-sonnet-4-20250514",
-  temperature: 0.7,                           // ローカル生成の温度
-  persona: "spartan",                         // チャットの人格（既定スパルタ）
-};
-let aiConfig = { ...DEFAULT_AI_CONFIG };
-const applyAiConfig = (cfg) => { aiConfig = { ...DEFAULT_AI_CONFIG, ...cfg }; };
-
-// ローカル：OpenAI互換 /chat/completions
-async function callLocal(messages, system, maxTokens) {
-  const msgs = system ? [{ role: "system", content: system }, ...messages] : messages;
-  const url = aiConfig.localEndpoint.replace(/\/$/, "") + "/chat/completions";
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: aiConfig.localModel, messages: msgs, max_tokens: maxTokens, temperature: aiConfig.temperature, stream: false }),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`ローカルLLM接続エラー (${res.status})。エンドポイント/モデル名/CORS設定を確認してください。${detail.slice(0, 200)}`);
-  }
-  const data = await res.json();
-  return data?.choices?.[0]?.message?.content || "";
-}
-
-// クラウド：Anthropic Messages
-async function callCloud(messages, system, maxTokens) {
-  const body = { model: aiConfig.cloudModel, max_tokens: maxTokens, messages };
-  if (system) body.system = system;
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`クラウドAPIエラー (${res.status})。${detail.slice(0, 200)}`);
-  }
-  const data = await res.json();
-  return (data.content || []).map(b => b.text || "").join("");
-}
-
-async function callClaude(messages, system, maxTokens = 1200) {
-  return aiConfig.mode === "local"
-    ? callLocal(messages, system, maxTokens)
-    : callCloud(messages, system, maxTokens);
-}
-
-// LLM出力から最初のJSON値（オブジェクト/配列）だけを抜き出す。
-// ローカル小型モデルが前後に地の文を付けても壊れにくくする。
-function extractJson(raw) {
-  let s = (raw || "").replace(/```json|```/g, "").trim();
-  const start = s.search(/[\[{]/);
-  if (start === -1) return s;
-  const open = s[start];
-  const close = open === "{" ? "}" : "]";
-  let depth = 0, inStr = false, esc = false, end = -1;
-  for (let i = start; i < s.length; i++) {
-    const ch = s[i];
-    if (inStr) {
-      if (esc) esc = false;
-      else if (ch === "\\") esc = true;
-      else if (ch === '"') inStr = false;
-    } else if (ch === '"') inStr = true;
-    else if (ch === open) depth++;
-    else if (ch === close) { depth--; if (depth === 0) { end = i; break; } }
-  }
-  return end === -1 ? s.slice(start) : s.slice(start, end + 1);
-}
-
-async function dumpProcess(dumpText, form, goals) {
-  const prompt =
-`あなたはユーザーの外部前頭葉として機能するAIです。ユーザーは疲労や思考混濁の状態で脳内ノイズをそのままテキストとして出力します。以下のダンプテキストを処理してください。
-
-# ユーザーの目標（参考情報・変更しない）
-- 大目標: ${goals.bigGoal || "（未設定）"}
-- 中目標: ${goals.midGoal || "（未設定）"}
-- 近目標: ${goals.nearGoal || "（未設定）"}
-
-# ユーザーのダンプテキスト
-${dumpText}
-
-# 既存のフォーム内容（上書きではなく統合する）
-- 今日ありがたいこと: ${form.grateful || "（空）"}
-- 今日の目標: ${form.todayGoal || "（空）"}
-- 明日の目標: ${form.tomorrowGoal || "（空）"}
-- ひとこと: ${form.memo || "（空）"}
-
-# 処理タスク
-1. ダンプテキストを4フィールドに振り分け整理。既存内容があれば統合・補完。
-2. 原文にない情報を勝手に追加しない。
-3. タスクが羅列されている場合はMECEに整理し優先順位をつける。
-4. 「今日の稼働シーケンス」は必ず配列形式で、1アクション1要素。物理動線ベース。精神論禁止。例:「帰宅したら座らずに浴室へ直行」
-5. どのフィールドにも属さない雑多な情報はmemoへ。
-
-# 出力形式（JSONのみ。コードブロック記号不要）
-{"grateful":"...","todayGoal":"...","tomorrowGoal":"...","memo":"...","sequence":["アクション1","アクション2"]}`;
-
-  const raw = await callClaude([{ role: "user", content: prompt }], "", 2000);
-  const parsed = JSON.parse(extractJson(raw));
-  parsed.sequence = normalizeSequence(parsed.sequence);
-  return parsed;
-}
-
-async function extractTodos(todayGoal, tomorrowGoal) {
-  if (!todayGoal && !tomorrowGoal) return [];
-  const prompt =
-`以下のジャーナル内容から、具体的な実行可能ToDoタスクを抽出してください。
-
-【今日の目標】${todayGoal || "（空）"}
-【明日の目標】${tomorrowGoal || "（空）"}
-
-# ルール
-- 抽象的な目標ではなく、具体的なアクションのみ抽出
-- 1タスク1アクション、15文字程度
-- whenは "today" または "tomorrow"
-- 最大5件、抽象的なら0件でもOK
-
-# 出力形式（JSONのみ）
-[{"text":"...","when":"today"}]`;
-
-  const raw = await callClaude([{ role: "user", content: prompt }], "", 800);
-  try { return JSON.parse(extractJson(raw)); }
-  catch { return []; }
-}
-
-// ═══════════════ ストレージ ═══════════════
-
-const LS_PREFIX = "journal_v1_";
-
-async function storageGet(key) {
-  try {
-    const r = await window.storage.get(key);
-    if (r) {
-      try { localStorage.setItem(LS_PREFIX + key, r.value); } catch {}
-      return JSON.parse(r.value);
-    }
-  } catch {}
-  try {
-    const raw = localStorage.getItem(LS_PREFIX + key);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return null;
-}
-
-async function storageSet(key, value) {
-  const s = JSON.stringify(value);
-  try { localStorage.setItem(LS_PREFIX + key, s); } catch {}
-  try { await window.storage.set(key, s); } catch {}
-}
-
-function exportData(payload) {
-  const data = { version: 1, exportedAt: new Date().toISOString(), ...payload };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "journal-backup-" + todayStr() + ".json";
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function importDataFile(file) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = (e) => { try { resolve(JSON.parse(e.target.result)); } catch { reject(new Error("JSONの解析に失敗しました")); } };
-    r.onerror = () => reject(new Error("ファイルの読み込みに失敗しました"));
-    r.readAsText(file);
-  });
-}
+// 定数・ロジック・ストレージは各モジュールへ分離済み。
+// このファイルは UI コンポーネントとアプリ全体の組み立て（App）を担う。
+import {
+  JOURNAL_FIELDS, BLOCK_COLORS, COLORS, MAIN_TABS, ROUTINE_TABS, AI_SUB_TABS,
+  GROUP_META, SOURCE_META, WEEKDAYS, DEFAULT_SETTINGS, DEFAULT_BASE_BLOCKS,
+} from "./constants.js";
+import {
+  todayStr, fmtDate, fmtShort, getOffsetDate, getRecentDates,
+} from "./lib/date.js";
+import { uid } from "./lib/id.js";
+import { extractJson } from "./lib/json.js";
+import {
+  emptyForm, emptyGoals, getTodoGroup, normalizeSequence, normalizeRoutines,
+  isRoutineDue, scheduleSummary, pruneByDateKey, pruneTodos,
+} from "./lib/domain.js";
+import { PERSONAS, DEFAULT_AI_CONFIG, applyAiConfig, callClaude } from "./api/client.js";
+import { dumpProcess, extractTodos } from "./api/prompts.js";
+import {
+  storageGet, storageSet, storageRemove, storageSetSync, exportData, importDataFile,
+} from "./storage/index.js";
 
 // ═══════════════ 共通UI ═══════════════
 
@@ -724,12 +355,6 @@ function TodoDueDatePicker({ dueDate, onSelect }) {
     </div>
   );
 }
-
-const SOURCE_META = {
-  "manual":       { label: "手動",       color: "#888" },
-  "ai-today":     { label: "今日の目標", color: "#38a169" },
-  "ai-tomorrow":  { label: "明日の目標", color: "#6c63ff" },
-};
 
 function TodoItem({ todo, onToggle, onRemove, onUpdateDueDate, onUpdateText }) {
   const [editing, setEditing] = useState(false);
@@ -1121,10 +746,8 @@ export default function App() {
   useEffect(() => {
     const h = () => {
       if (!dirtyRef.current) return;
-      try {
-        const updated = { ...entriesRef.current, [selDateRef.current]: formRef.current };
-        localStorage.setItem(LS_PREFIX + "journal-entries", JSON.stringify(updated));
-      } catch {}
+      const updated = { ...entriesRef.current, [selDateRef.current]: formRef.current };
+      storageSetSync("journal-entries", updated);
     };
     window.addEventListener("beforeunload", h);
     return () => window.removeEventListener("beforeunload", h);
@@ -1423,17 +1046,6 @@ ${fmt(base.blocks.filter(b => !b.fixed)) || "なし"}
     await storageSet("routine-checks", next);
   };
 
-  const getRecentDates = (n) => {
-    const out = [];
-    const base = new Date(todayStr());
-    for (let i = n - 1; i >= 0; i--) {
-      const d = new Date(base);
-      d.setDate(d.getDate() - i);
-      out.push(toLocalDateStr(d));
-    }
-    return out;
-  };
-
   // ─── AI ───
   const buildChatSystem = (date) => {
     const e = entries[date] || form;
@@ -1588,8 +1200,7 @@ ${routineSummary}
     const keys = ["journal-entries","goals","base-schedule-list","active-base-id",
       "generated-schedules","routines","routine-checks","todos","ai-config","app-settings"];
     for (const k of keys) {
-      try { await window.storage.delete?.(k); } catch {}
-      try { localStorage.removeItem(LS_PREFIX + k); } catch {}
+      await storageRemove(k);
     }
     setEntries({}); setGoals(emptyGoals()); setGoalsEditing(emptyGoals());
     setBaseList([]); setActiveBaseId(null); setGeneratedScheds({});

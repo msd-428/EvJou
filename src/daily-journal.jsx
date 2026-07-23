@@ -20,6 +20,7 @@ import { dumpProcess, extractTodos } from "./api/prompts.js";
 import {
   storageGet, storageSet, storageRemove, storageSetSync, exportData, importDataFile,
 } from "./storage/index.js";
+import { useTodos } from "./features/useTodos.js";
 
 // ═══════════════ 共通UI ═══════════════
 
@@ -649,8 +650,6 @@ export default function App() {
   const [schedLoading, setSchedLoading] = useState(false);
   const [editorState, setEditorState] = useState(null);
   const [showBaseList, setShowBaseList] = useState(false);
-  const [todos, setTodos] = useState([]);
-  const [todoInput, setTodoInput] = useState("");
 
   const [routineSubTab, setRoutineSubTab] = useState("check");
   const [routines, setRoutines] = useState({ active: [], done: [] });
@@ -675,6 +674,13 @@ export default function App() {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const fileInputRef = useRef(null);
 
+  // ─── ドメインフック（状態管理・ロジックを分離） ───
+  const {
+    todos, setTodos, todoInput, setTodoInput,
+    saveTodos, addTodoManual, toggleTodo, removeTodo,
+    updateTodoDueDate, updateTodoText, clearDoneTodos, addExtractedTodos,
+  } = useTodos(settings);
+
   // 初期ロード
   useEffect(() => {
     (async () => {
@@ -684,7 +690,6 @@ export default function App() {
       const gs = await storageGet("generated-schedules"); if (gs) setGeneratedScheds(gs);
       const rt = await storageGet("routines"); if (rt) setRoutines(normalizeRoutines(rt));
       const rc = await storageGet("routine-checks"); if (rc) setRoutineChecks(rc);
-      const td = await storageGet("todos"); if (td) setTodos(td);
       const gl = await storageGet("goals"); if (gl) { setGoals(gl); setGoalsEditing(gl); }
       const cfg = await storageGet("ai-config"); if (cfg) { setAiCfg({ ...DEFAULT_AI_CONFIG, ...cfg }); applyAiConfig(cfg); }
       const st = await storageGet("app-settings");
@@ -789,44 +794,6 @@ export default function App() {
     setShowGoals(false);
   };
 
-  // ─── ToDo ───
-  const saveTodos = async (next) => {
-    const pruned = pruneTodos(next, settings.limitDoneTodos);
-    setTodos(pruned);
-    await storageSet("todos", pruned);
-  };
-
-  const addTodoManual = async () => {
-    const text = todoInput.trim();
-    if (!text) return;
-    await saveTodos([...todos, {
-      id: uid(), text, done: false, source: "manual",
-      createdAt: todayStr(), dueDate: null,
-    }]);
-    setTodoInput("");
-  };
-
-  const toggleTodo = async (id) => {
-    await saveTodos(todos.map(t => t.id === id ? { ...t, done: !t.done } : t));
-  };
-
-  const removeTodo = async (id) => {
-    await saveTodos(todos.filter(t => t.id !== id));
-  };
-
-  const updateTodoDueDate = async (id, dueDate) => {
-    await saveTodos(todos.map(t => t.id === id ? { ...t, dueDate } : t));
-  };
-
-  const updateTodoText = async (id, text) => {
-    await saveTodos(todos.map(t => t.id === id ? { ...t, text } : t));
-  };
-
-  const clearDoneTodos = async () => {
-    if (!window.confirm("完了済みのToDoをすべて削除しますか？")) return;
-    await saveTodos(todos.filter(t => !t.done));
-  };
-
   // ─── 日記保存 ───
   const saveEntry = async () => {
     await saveEntryState(form);
@@ -837,18 +804,7 @@ export default function App() {
     if (!settings.autoExtractOnSave) return;
     try {
       const extracted = await extractTodos(form.todayGoal, form.tomorrowGoal);
-      if (extracted?.length > 0) {
-        const existing = new Set(todos.map(t => t.text));
-        const newTodos = extracted
-          .filter(e => e.text && !existing.has(e.text))
-          .map(e => ({
-            id: uid(), text: e.text, done: false,
-            source: "ai-" + (e.when || "today"),
-            createdAt: selDate,
-            dueDate: e.when === "tomorrow" ? getOffsetDate(selDate, 1) : selDate,
-          }));
-        if (newTodos.length > 0) await saveTodos([...todos, ...newTodos]);
-      }
+      addExtractedTodos(extracted, selDate);
     } catch {}
   };
 
@@ -873,18 +829,7 @@ export default function App() {
 
       if (settings.autoExtractOnDump) try {
         const extracted = await extractTodos(newForm.todayGoal, newForm.tomorrowGoal);
-        if (extracted?.length > 0) {
-          const existing = new Set(todos.map(t => t.text));
-          const newTodos = extracted
-            .filter(e => e.text && !existing.has(e.text))
-            .map(e => ({
-              id: uid(), text: e.text, done: false,
-              source: "ai-" + (e.when || "today"),
-              createdAt: selDate,
-              dueDate: e.when === "tomorrow" ? getOffsetDate(selDate, 1) : selDate,
-            }));
-          if (newTodos.length > 0) await saveTodos([...todos, ...newTodos]);
-        }
+        addExtractedTodos(extracted, selDate);
       } catch {}
     } catch (err) {
       alert("整理に失敗しました: " + err.message);

@@ -1,0 +1,57 @@
+import { useState } from "react";
+import { useStorage } from "../storage/useStorage.js";
+import { uid } from "../lib/id.js";
+import { todayStr, getOffsetDate } from "../lib/date.js";
+import { pruneTodos } from "../lib/domain.js";
+
+// ToDoドメインの状態とロジック。保存先は storage 層（useStorage）に隠蔽。
+// settings は件数制限（limitDoneTodos）の参照にのみ使う。
+export function useTodos(settings) {
+  const [todos, setTodos] = useStorage("todos", []);
+  const [todoInput, setTodoInput] = useState("");
+
+  // 保存（完了ToDoの件数制限を適用）。useStorage が自動で永続化する。
+  const saveTodos = (next) => setTodos(pruneTodos(next, settings.limitDoneTodos));
+
+  const addTodoManual = () => {
+    const text = todoInput.trim();
+    if (!text) return;
+    saveTodos([...todos, {
+      id: uid(), text, done: false, source: "manual",
+      createdAt: todayStr(), dueDate: null,
+    }]);
+    setTodoInput("");
+  };
+
+  const toggleTodo = (id) => saveTodos(todos.map(t => t.id === id ? { ...t, done: !t.done } : t));
+  const removeTodo = (id) => saveTodos(todos.filter(t => t.id !== id));
+  const updateTodoDueDate = (id, dueDate) => saveTodos(todos.map(t => t.id === id ? { ...t, dueDate } : t));
+  const updateTodoText = (id, text) => saveTodos(todos.map(t => t.id === id ? { ...t, text } : t));
+
+  const clearDoneTodos = () => {
+    if (!window.confirm("完了済みのToDoをすべて削除しますか？")) return;
+    saveTodos(todos.filter(t => !t.done));
+  };
+
+  // AI抽出結果をToDoへ統合（既存テキストと重複しないものだけ追加）。
+  // 日記保存・ダンプ整理の両方から呼ばれる共通処理。
+  const addExtractedTodos = (extracted, baseDate) => {
+    if (!extracted?.length) return;
+    const existing = new Set(todos.map(t => t.text));
+    const newTodos = extracted
+      .filter(e => e.text && !existing.has(e.text))
+      .map(e => ({
+        id: uid(), text: e.text, done: false,
+        source: "ai-" + (e.when || "today"),
+        createdAt: baseDate,
+        dueDate: e.when === "tomorrow" ? getOffsetDate(baseDate, 1) : baseDate,
+      }));
+    if (newTodos.length > 0) saveTodos([...todos, ...newTodos]);
+  };
+
+  return {
+    todos, setTodos, todoInput, setTodoInput,
+    saveTodos, addTodoManual, toggleTodo, removeTodo,
+    updateTodoDueDate, updateTodoText, clearDoneTodos, addExtractedTodos,
+  };
+}

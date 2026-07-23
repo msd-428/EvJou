@@ -25,9 +25,14 @@ Microsoft To Do / Google ToDo のような **ローカルファースト設計**
 ## ビルド・実行
 ```bash
 npm install
-npm run dev      # 開発サーバ
-npm run build    # 本番ビルド（リファクタ後は必ず通す）
+npm run dev            # 開発サーバ
+npm run build          # 本番ビルド（リファクタ後は必ず通す）
+npm run test:dataloss  # 手入力消失対策の実機ブラウザ回帰テスト（生命線）
 ```
+
+`test:dataloss` は Playwright で「自動保存(800ms)／日付切替フラッシュ／リロード保険(beforeunload)」を検証する。
+ブラウザが別管理の環境では `PLAYWRIGHT_CHROMIUM=<chromiumパス>` を渡す。
+**ジャーナルの保存経路（`src/features/useJournal.js`）を触ったら必ず通すこと。**
 
 ## 既知の地雷
 - **`window.storage`**：Claude.ai アーティファクト専用API。通常環境には無い。`src/storage/` のアダブタに閉じ込め済み（localStorage 実装）。生の `window.storage` は追加しない。

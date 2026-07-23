@@ -15,15 +15,15 @@ import {
   isRoutineDue, scheduleSummary, pruneByDateKey, pruneTodos,
 } from "./lib/domain.js";
 import { PERSONAS, DEFAULT_AI_CONFIG, applyAiConfig, callClaude } from "./api/client.js";
-import { dumpProcess, extractTodos } from "./api/prompts.js";
 import {
-  storageGet, storageSet, storageRemove, storageSetSync, exportData, importDataFile,
+  storageGet, storageSet, storageRemove, exportData, importDataFile,
 } from "./storage/index.js";
 import { useTodos } from "./features/useTodos.js";
 import { useRoutines } from "./features/useRoutines.js";
 import { useGoals } from "./features/useGoals.js";
 import { useSchedule } from "./features/useSchedule.js";
 import { useSettings } from "./features/useSettings.js";
+import { useJournal } from "./features/useJournal.js";
 
 // ═══════════════ 共通UI ═══════════════
 
@@ -631,17 +631,6 @@ const inputStyle = {
 
 export default function App() {
   const [tab, setTab] = useState("write");
-  const [entries, setEntries] = useState({});
-  const [form, setForm] = useState(emptyForm());
-  const [selDate, setSelDate] = useState(todayStr());
-  const [saved, setSaved] = useState(false);
-
-  const [dumpText, setDumpText] = useState("");
-  const [dumpLoading, setDumpLoading] = useState(false);
-  const [showDump, setShowDump] = useState(false);
-
-  const [showSaveToast, setShowSaveToast] = useState(false);
-  const saveToastTimer = useRef(null);
 
   const [editorState, setEditorState] = useState(null);
   const [showBaseList, setShowBaseList] = useState(false);
@@ -683,13 +672,18 @@ export default function App() {
     generatedScheds, setGeneratedScheds, schedLoading, activeBase,
     saveBaseSchedule, switchActiveBase, deleteBase, generateSchedule,
   } = useSchedule();
+  const {
+    entries, setEntries, form, setForm, selDate, setSelDate, saved,
+    dumpText, setDumpText, dumpLoading, showDump, setShowDump,
+    showSaveToast, hideToast,
+    updateField, saveEntry, runDumpProcess, clearDump, toggleSequenceCheck,
+  } = useJournal({ settings, goals, addExtractedTodos });
 
   // 初期ロード（日記本体と、起動時の表示設定）
   // 設定・各ドメインの値は各フックが useStorage で自ロードする。
   // ここは横断的な起動時挙動（開くタブ・開く日付）だけを担う。
   useEffect(() => {
     (async () => {
-      const e = await storageGet("journal-entries"); if (e) setEntries(e);
       const st = await storageGet("app-settings");
       if (st) {
         if (st.defaultTab) setTab(st.defaultTab);
@@ -701,143 +695,10 @@ export default function App() {
     })();
   }, []);
 
-  // 手入力の消失防止：最新値の参照と編集フラグ
-  const dirtyRef = useRef(false);
-  const formRef = useRef(form);   formRef.current = form;
-  const entriesRef = useRef(entries); entriesRef.current = entries;
-  const selDateRef = useRef(selDate); selDateRef.current = selDate;
-
-  // 日付変更時にフォーム同期（同期は外部由来なのでdirtyを立てない）
-  useEffect(() => {
-    if (entries[selDate]) {
-      const entry = { ...emptyForm(), ...entries[selDate] };
-      entry.sequence = normalizeSequence(entry.sequence);
-      entry.sequenceChecks = entry.sequenceChecks || {};
-      setForm(entry);
-    } else {
-      setForm(emptyForm());
-    }
-    dirtyRef.current = false;
-  }, [selDate, entries]);
-
-  // 編集後しばらくで自動保存（保存ボタン押し忘れ対策）
-  useEffect(() => {
-    if (!dirtyRef.current) return;
-    const t = setTimeout(() => {
-      saveEntryState(formRef.current);
-      dirtyRef.current = false;
-    }, 800);
-    return () => clearTimeout(t);
-  }, [form]);
-
-  // 日付切替の直前に未保存をフラッシュ（cleanupは旧selDateで走る）
-  useEffect(() => {
-    return () => {
-      if (dirtyRef.current) {
-        const updated = pruneByDateKey({ ...entriesRef.current, [selDate]: formRef.current }, settings.limitEntriesDays);
-        entriesRef.current = updated;
-        setEntries(updated);
-        storageSet("journal-entries", updated);
-        dirtyRef.current = false;
-      }
-    };
-  }, [selDate]);
-
-  // リロード/閉じる時の保険（localStorageへ同期保存）
-  useEffect(() => {
-    const h = () => {
-      if (!dirtyRef.current) return;
-      const updated = { ...entriesRef.current, [selDateRef.current]: formRef.current };
-      storageSetSync("journal-entries", updated);
-    };
-    window.addEventListener("beforeunload", h);
-    return () => window.removeEventListener("beforeunload", h);
-  }, []);
-
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMsgs, chatLoading]);
-
-  // 「最後に開いた日」モード時、選択日を記憶
-  useEffect(() => {
-    if (settings.startDateMode === "last") storageSet("last-date", selDate);
-  }, [selDate, settings.startDateMode]);
 
   const todaySched = generatedScheds[selDate] || null;
   const sortedDates = Object.keys(entries).sort().reverse();
-
-  // ─── トースト ───
-  const showToast = () => {
-    clearTimeout(saveToastTimer.current);
-    setShowSaveToast(true);
-    saveToastTimer.current = setTimeout(() => setShowSaveToast(false), (settings.toastSeconds || 5) * 1000);
-  };
-  const hideToast = () => {
-    clearTimeout(saveToastTimer.current);
-    setShowSaveToast(false);
-  };
-
-  // ─── エントリ保存ヘルパー ───
-  const saveEntryState = async (newForm) => {
-    const updated = pruneByDateKey({ ...entries, [selDate]: newForm }, settings.limitEntriesDays);
-    setEntries(updated);
-    await storageSet("journal-entries", updated);
-  };
-
-  // ─── 日記保存 ───
-  const saveEntry = async () => {
-    await saveEntryState(form);
-    dirtyRef.current = false;
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-
-    if (!settings.autoExtractOnSave) return;
-    try {
-      const extracted = await extractTodos(form.todayGoal, form.tomorrowGoal);
-      addExtractedTodos(extracted, selDate);
-    } catch {}
-  };
-
-  // ─── ダンプ整理 ───
-  const runDumpProcess = async () => {
-    if (!dumpText.trim()) { alert("ダンプ内容を入力してください"); return; }
-    setDumpLoading(true);
-    try {
-      const result = await dumpProcess(dumpText, form, goals);
-      const newForm = {
-        grateful: result.grateful || form.grateful || "",
-        todayGoal: result.todayGoal || form.todayGoal || "",
-        tomorrowGoal: result.tomorrowGoal || form.tomorrowGoal || "",
-        memo: result.memo || form.memo || "",
-        sequence: result.sequence,
-        sequenceChecks: {},
-      };
-      setForm(newForm);
-      dirtyRef.current = false;
-      await saveEntryState(newForm);
-      showToast();
-
-      if (settings.autoExtractOnDump) try {
-        const extracted = await extractTodos(newForm.todayGoal, newForm.tomorrowGoal);
-        addExtractedTodos(extracted, selDate);
-      } catch {}
-    } catch (err) {
-      alert("整理に失敗しました: " + err.message);
-    }
-    setDumpLoading(false);
-  };
-
-  const clearDump = () => {
-    if (!window.confirm("ダンプ入力をクリアしますか？")) return;
-    setDumpText("");
-  };
-
-  // ─── 稼働シーケンス個別チェック ───
-  const toggleSequenceCheck = async (idx) => {
-    const checks = { ...(form.sequenceChecks || {}) };
-    checks[idx] = !checks[idx];
-    const newForm = { ...form, sequenceChecks: checks };
-    setForm(newForm);
-    await saveEntryState(newForm);
-  };
 
   // ─── AI ───
   const buildChatSystem = (date) => {
@@ -1174,7 +1035,7 @@ ${routineSummary}
           {JOURNAL_FIELDS.filter(f => !settings.hiddenFields.includes(f.key)).map(f => (
             <div key={f.key} style={{ marginBottom:16 }}>
               <label style={{ display:"block", fontWeight:700, color:"#3a3a3a", fontSize:14, marginBottom:6 }}>{f.label}</label>
-              <textarea value={form[f.key]} onChange={e => { dirtyRef.current = true; setForm({ ...form, [f.key]: e.target.value }); }}
+              <textarea value={form[f.key]} onChange={e => updateField(f.key, e.target.value)}
                 placeholder={f.placeholder} rows={f.rows}
                 style={{ width:"100%", padding:"10px 12px", borderRadius:10, border:"1px solid #e0dcd5", fontSize:14, resize:"vertical", background:"#fff", boxSizing:"border-box", lineHeight:1.6, color:"#333" }} />
             </div>

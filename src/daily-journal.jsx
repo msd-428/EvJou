@@ -22,6 +22,7 @@ import {
 } from "./storage/index.js";
 import { useTodos } from "./features/useTodos.js";
 import { useRoutines } from "./features/useRoutines.js";
+import { useGoals } from "./features/useGoals.js";
 
 // ═══════════════ 共通UI ═══════════════
 
@@ -634,10 +635,6 @@ export default function App() {
   const [selDate, setSelDate] = useState(todayStr());
   const [saved, setSaved] = useState(false);
 
-  const [goals, setGoals] = useState(emptyGoals());
-  const [goalsEditing, setGoalsEditing] = useState(emptyGoals());
-  const [showGoals, setShowGoals] = useState(false);
-
   const [dumpText, setDumpText] = useState("");
   const [dumpLoading, setDumpLoading] = useState(false);
   const [showDump, setShowDump] = useState(false);
@@ -682,6 +679,9 @@ export default function App() {
     routineInput, setRoutineInput, routineSubTab, setRoutineSubTab,
     saveRoutines, addRoutine, removeRoutine, moveRoutine, updateRoutineSchedule, toggleRoutineCheck,
   } = useRoutines(settings);
+  const {
+    goals, setGoals, goalsEditing, setGoalsEditing, showGoals, setShowGoals, saveGoals,
+  } = useGoals();
 
   // 初期ロード
   useEffect(() => {
@@ -690,7 +690,6 @@ export default function App() {
       const bl = await storageGet("base-schedule-list"); if (bl) setBaseList(bl);
       const ai = await storageGet("active-base-id"); if (ai) setActiveBaseId(ai);
       const gs = await storageGet("generated-schedules"); if (gs) setGeneratedScheds(gs);
-      const gl = await storageGet("goals"); if (gl) { setGoals(gl); setGoalsEditing(gl); }
       const cfg = await storageGet("ai-config"); if (cfg) { setAiCfg({ ...DEFAULT_AI_CONFIG, ...cfg }); applyAiConfig(cfg); }
       const st = await storageGet("app-settings");
       if (st) {
@@ -785,13 +784,6 @@ export default function App() {
     const updated = pruneByDateKey({ ...entries, [selDate]: newForm }, settings.limitEntriesDays);
     setEntries(updated);
     await storageSet("journal-entries", updated);
-  };
-
-  // ─── 目標 ───
-  const saveGoals = async () => {
-    setGoals(goalsEditing);
-    await storageSet("goals", goalsEditing);
-    setShowGoals(false);
   };
 
   // ─── 日記保存 ───

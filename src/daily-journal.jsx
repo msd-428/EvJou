@@ -23,6 +23,7 @@ import { useTodos } from "./features/useTodos.js";
 import { useRoutines } from "./features/useRoutines.js";
 import { useGoals } from "./features/useGoals.js";
 import { useSchedule } from "./features/useSchedule.js";
+import { useSettings } from "./features/useSettings.js";
 
 // ═══════════════ 共通UI ═══════════════
 
@@ -660,11 +661,10 @@ export default function App() {
   const [importError, setImportError] = useState("");
   const [importSuccess, setImportSuccess] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [aiCfg, setAiCfg] = useState(DEFAULT_AI_CONFIG);
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const fileInputRef = useRef(null);
 
   // ─── ドメインフック（状態管理・ロジックを分離） ───
+  const { settings, setSettings, aiCfg, setAiCfg, saveAiCfg, saveSettings } = useSettings();
   const {
     todos, setTodos, todoInput, setTodoInput,
     saveTodos, addTodoManual, toggleTodo, removeTodo,
@@ -684,17 +684,16 @@ export default function App() {
     saveBaseSchedule, switchActiveBase, deleteBase, generateSchedule,
   } = useSchedule();
 
-  // 初期ロード
+  // 初期ロード（日記本体と、起動時の表示設定）
+  // 設定・各ドメインの値は各フックが useStorage で自ロードする。
+  // ここは横断的な起動時挙動（開くタブ・開く日付）だけを担う。
   useEffect(() => {
     (async () => {
       const e = await storageGet("journal-entries"); if (e) setEntries(e);
-      const cfg = await storageGet("ai-config"); if (cfg) { setAiCfg({ ...DEFAULT_AI_CONFIG, ...cfg }); applyAiConfig(cfg); }
       const st = await storageGet("app-settings");
       if (st) {
-        const merged = { ...DEFAULT_SETTINGS, ...st };
-        setSettings(merged);
-        if (merged.defaultTab) setTab(merged.defaultTab);
-        if (merged.startDateMode === "last") {
+        if (st.defaultTab) setTab(st.defaultTab);
+        if (st.startDateMode === "last") {
           const last = await storageGet("last-date");
           if (last && typeof last === "string") setSelDate(last);
         }
@@ -944,19 +943,6 @@ ${routineSummary}
   };
 
   // ─── 設定 ───
-  const saveAiCfg = async (next) => {
-    const merged = { ...DEFAULT_AI_CONFIG, ...next };
-    setAiCfg(merged);
-    applyAiConfig(merged);
-    await storageSet("ai-config", merged);
-  };
-
-  const saveSettings = async (next) => {
-    const merged = { ...DEFAULT_SETTINGS, ...next };
-    setSettings(merged);
-    await storageSet("app-settings", merged);
-  };
-
   const handleExport = () => {
     exportData({ entries, baseList, activeBaseId, generatedScheds, routines, routineChecks, todos, goals, aiCfg, settings });
   };

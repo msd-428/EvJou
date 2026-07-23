@@ -10,7 +10,6 @@ import {
   todayStr, fmtDate, fmtShort, getOffsetDate, getRecentDates,
 } from "./lib/date.js";
 import { uid } from "./lib/id.js";
-import { extractJson } from "./lib/json.js";
 import {
   emptyForm, emptyGoals, getTodoGroup, normalizeSequence, normalizeRoutines,
   isRoutineDue, scheduleSummary, pruneByDateKey, pruneTodos,
@@ -23,6 +22,7 @@ import {
 import { useTodos } from "./features/useTodos.js";
 import { useRoutines } from "./features/useRoutines.js";
 import { useGoals } from "./features/useGoals.js";
+import { useSchedule } from "./features/useSchedule.js";
 
 // ═══════════════ 共通UI ═══════════════
 
@@ -642,10 +642,6 @@ export default function App() {
   const [showSaveToast, setShowSaveToast] = useState(false);
   const saveToastTimer = useRef(null);
 
-  const [baseList, setBaseList] = useState([]);
-  const [activeBaseId, setActiveBaseId] = useState(null);
-  const [generatedScheds, setGeneratedScheds] = useState({});
-  const [schedLoading, setSchedLoading] = useState(false);
   const [editorState, setEditorState] = useState(null);
   const [showBaseList, setShowBaseList] = useState(false);
 
@@ -682,14 +678,16 @@ export default function App() {
   const {
     goals, setGoals, goalsEditing, setGoalsEditing, showGoals, setShowGoals, saveGoals,
   } = useGoals();
+  const {
+    baseList, setBaseList, activeBaseId, setActiveBaseId,
+    generatedScheds, setGeneratedScheds, schedLoading, activeBase,
+    saveBaseSchedule, switchActiveBase, deleteBase, generateSchedule,
+  } = useSchedule();
 
   // 初期ロード
   useEffect(() => {
     (async () => {
       const e = await storageGet("journal-entries"); if (e) setEntries(e);
-      const bl = await storageGet("base-schedule-list"); if (bl) setBaseList(bl);
-      const ai = await storageGet("active-base-id"); if (ai) setActiveBaseId(ai);
-      const gs = await storageGet("generated-schedules"); if (gs) setGeneratedScheds(gs);
       const cfg = await storageGet("ai-config"); if (cfg) { setAiCfg({ ...DEFAULT_AI_CONFIG, ...cfg }); applyAiConfig(cfg); }
       const st = await storageGet("app-settings");
       if (st) {
@@ -764,7 +762,6 @@ export default function App() {
     if (settings.startDateMode === "last") storageSet("last-date", selDate);
   }, [selDate, settings.startDateMode]);
 
-  const activeBase = baseList.find(b => b.id === activeBaseId) || null;
   const todaySched = generatedScheds[selDate] || null;
   const sortedDates = Object.keys(entries).sort().reverse();
 
@@ -841,81 +838,6 @@ export default function App() {
     const newForm = { ...form, sequenceChecks: checks };
     setForm(newForm);
     await saveEntryState(newForm);
-  };
-
-  // ─── スケジュール ───
-  const saveBaseSchedule = async (newBase) => {
-    const exists = baseList.some(b => b.id === newBase.id);
-    const updated = exists
-      ? baseList.map(b => b.id === newBase.id ? newBase : b)
-      : [...baseList, newBase];
-    setBaseList(updated);
-    await storageSet("base-schedule-list", updated);
-    if (!activeBaseId) {
-      setActiveBaseId(newBase.id);
-      await storageSet("active-base-id", newBase.id);
-    }
-  };
-
-  const switchActiveBase = async (id) => {
-    setActiveBaseId(id);
-    await storageSet("active-base-id", id);
-  };
-
-  const deleteBase = async (id) => {
-    if (!window.confirm("このスケジュールを削除しますか？")) return;
-    const updated = baseList.filter(b => b.id !== id);
-    setBaseList(updated);
-    await storageSet("base-schedule-list", updated);
-    if (activeBaseId === id) {
-      const next = updated[0]?.id || null;
-      setActiveBaseId(next);
-      await storageSet("active-base-id", next);
-    }
-  };
-
-  const generateSchedule = async () => {
-    if (!activeBase) { alert("先にベーススケジュールを設定してください"); return; }
-    setSchedLoading(true);
-    const base = activeBase;
-    const e = entries[selDate] || form;
-    const fmt = (arr) => arr.map(b => b.time + " " + b.label).join("\n");
-    const prompt =
-`あなたは日次スケジュール作成AIです。以下の情報をもとに、今日の最適なスケジュールをJSON配列で返してください。コードブロック記号不要、JSONのみ。
-
-## ベーススケジュール名
-${base.name}
-
-## 備考
-${base.note || "（なし）"}
-
-## 固定ブロック（変えない）
-${fmt(base.blocks.filter(b => b.fixed)) || "なし"}
-
-## 可変ブロック（調整OK）
-${fmt(base.blocks.filter(b => !b.fixed)) || "なし"}
-
-## 今日のジャーナル
-- 大目標: ${goals.bigGoal || "未設定"}
-- 中目標: ${goals.midGoal || "未設定"}
-- 近目標: ${goals.nearGoal || "未設定"}
-- 今日の目標: ${e.todayGoal || "未記入"}
-- 明日の目標: ${e.tomorrowGoal || "未記入"}
-- ひとこと: ${e.memo || "未記入"}
-
-## 出力形式
-[{"time":"HH:MM","label":"タスク名","note":"コメント","fixed":true}]`;
-
-    try {
-      const raw = await callClaude([{ role: "user", content: prompt }], "", 1500);
-      const parsed = JSON.parse(extractJson(raw));
-      const updated = { ...generatedScheds, [selDate]: parsed };
-      setGeneratedScheds(updated);
-      await storageSet("generated-schedules", updated);
-    } catch (err) {
-      alert("スケジュール生成に失敗しました: " + err.message);
-    }
-    setSchedLoading(false);
   };
 
   // ─── AI ───
@@ -1343,7 +1265,7 @@ ${routineSummary}
                 )}
               </div>
 
-              <Btn variant="primary" disabled={schedLoading || !activeBase} onClick={generateSchedule}
+              <Btn variant="primary" disabled={schedLoading || !activeBase} onClick={() => generateSchedule({ selDate, entry: entries[selDate] || form, goals })}
                 style={{ width:"100%", padding:"13px", fontSize:15, marginBottom:16 }}>
                 {schedLoading ? "⏳ スケジュール生成中..." : "✨ 今日のスケジュールを生成"}
               </Btn>

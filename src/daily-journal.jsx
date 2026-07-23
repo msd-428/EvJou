@@ -21,6 +21,7 @@ import {
   storageGet, storageSet, storageRemove, storageSetSync, exportData, importDataFile,
 } from "./storage/index.js";
 import { useTodos } from "./features/useTodos.js";
+import { useRoutines } from "./features/useRoutines.js";
 
 // ═══════════════ 共通UI ═══════════════
 
@@ -651,11 +652,7 @@ export default function App() {
   const [editorState, setEditorState] = useState(null);
   const [showBaseList, setShowBaseList] = useState(false);
 
-  const [routineSubTab, setRoutineSubTab] = useState("check");
-  const [routines, setRoutines] = useState({ active: [], done: [] });
-  const [routineInput, setRoutineInput] = useState("");
   const [routineSchedEdit, setRoutineSchedEdit] = useState(null);
-  const [routineChecks, setRoutineChecks] = useState({});
 
   const [aiSubTab, setAiSubTab] = useState("chat");
   const [chatMsgs, setChatMsgs] = useState([]);
@@ -680,6 +677,11 @@ export default function App() {
     saveTodos, addTodoManual, toggleTodo, removeTodo,
     updateTodoDueDate, updateTodoText, clearDoneTodos, addExtractedTodos,
   } = useTodos(settings);
+  const {
+    routines, setRoutines, routineChecks, setRoutineChecks,
+    routineInput, setRoutineInput, routineSubTab, setRoutineSubTab,
+    saveRoutines, addRoutine, removeRoutine, moveRoutine, updateRoutineSchedule, toggleRoutineCheck,
+  } = useRoutines(settings);
 
   // 初期ロード
   useEffect(() => {
@@ -688,8 +690,6 @@ export default function App() {
       const bl = await storageGet("base-schedule-list"); if (bl) setBaseList(bl);
       const ai = await storageGet("active-base-id"); if (ai) setActiveBaseId(ai);
       const gs = await storageGet("generated-schedules"); if (gs) setGeneratedScheds(gs);
-      const rt = await storageGet("routines"); if (rt) setRoutines(normalizeRoutines(rt));
-      const rc = await storageGet("routine-checks"); if (rc) setRoutineChecks(rc);
       const gl = await storageGet("goals"); if (gl) { setGoals(gl); setGoalsEditing(gl); }
       const cfg = await storageGet("ai-config"); if (cfg) { setAiCfg({ ...DEFAULT_AI_CONFIG, ...cfg }); applyAiConfig(cfg); }
       const st = await storageGet("app-settings");
@@ -924,71 +924,6 @@ ${fmt(base.blocks.filter(b => !b.fixed)) || "なし"}
       alert("スケジュール生成に失敗しました: " + err.message);
     }
     setSchedLoading(false);
-  };
-
-  // ─── ルーチン ───
-  const saveRoutines = async (next) => {
-    setRoutines(next);
-    await storageSet("routines", next);
-  };
-
-  const addRoutine = async () => {
-    const text = routineInput.trim();
-    if (!text) return;
-    const targetTab = routineSubTab === "done" ? "done" : "active";
-    const list = routines[targetTab];
-    if (list.length >= settings.limitRoutinePerTab) { alert(`1タブ最大${settings.limitRoutinePerTab}個までです`); return; }
-    if (list.some(r => r.text === text)) { alert("同じ内容がすでにあります"); return; }
-    const newRoutine = { id: uid(), text, schedule: { type: "daily" } };
-    await saveRoutines({ ...routines, [targetTab]: [...list, newRoutine] });
-    setRoutineInput("");
-  };
-
-  const removeRoutine = async (tabName, id) => {
-    await saveRoutines({ ...routines, [tabName]: routines[tabName].filter(r => r.id !== id) });
-    if (tabName === "active") {
-      let changed = false;
-      const cleaned = {};
-      for (const [d, dc] of Object.entries(routineChecks)) {
-        if (dc && dc[id] !== undefined) {
-          const { [id]: _drop, ...rest } = dc;
-          cleaned[d] = rest;
-          changed = true;
-        } else cleaned[d] = dc;
-      }
-      if (changed) {
-        setRoutineChecks(cleaned);
-        await storageSet("routine-checks", cleaned);
-      }
-    }
-  };
-
-  const moveRoutine = async (from, id) => {
-    const to = from === "active" ? "done" : "active";
-    const item = routines[from].find(r => r.id === id);
-    if (!item) return;
-    await saveRoutines({
-      ...routines,
-      [from]: routines[from].filter(r => r.id !== id),
-      [to]: [...routines[to], item],
-    });
-  };
-
-  const updateRoutineSchedule = async (tabName, id, schedule) => {
-    await saveRoutines({
-      ...routines,
-      [tabName]: routines[tabName].map(r => r.id === id ? { ...r, schedule } : r),
-    });
-  };
-
-  const toggleRoutineCheck = async (date, routineId) => {
-    const dc = routineChecks[date] || {};
-    const next = pruneByDateKey({
-      ...routineChecks,
-      [date]: { ...dc, [routineId]: !dc[routineId] },
-    }, settings.limitRoutineCheckDays);
-    setRoutineChecks(next);
-    await storageSet("routine-checks", next);
   };
 
   // ─── AI ───

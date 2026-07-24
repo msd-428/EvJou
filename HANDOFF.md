@@ -180,3 +180,28 @@ src/
   実挙動は深追いしない。** UI の器（BYOKキー入力欄／ローカル⇔BYOK切替UI／保存導線）だけを
   `components/settings.jsx`(AiSettings) と `api/client.js` を土台に整える範囲に留める。
 - その後：候補3（ネイティブ化前の徹底コードレビュー）。
+
+---
+
+## 9. 候補2（AI: BYOK 方式）完了記録 — ガワのみ（2026-07 / Claude Code）
+
+指示通り **UIの「ガワ（骨組み）」だけ**を実装。**通信ロジックは不変**（実機で認証検証できる環境が
+整うまで深追いしない）。
+
+- `components/settings.jsx`(AiSettings)：モード切替を「🖥 ローカル / 🔑 BYOK」に。
+  BYOK 選択時に **APIキー入力欄（password）**、「キーは端末内にのみ保存」の注記、外部送信の警告を表示。
+- `api/client.js`：`DEFAULT_AI_CONFIG` に `apiKey: ""` を追加（端末内保存）。
+  `callCloud` には **NOTE のみ**を残し、`x-api-key` ヘッダへの配線は**未実施**（意図的保留）。
+- 内部 `mode` は `local|cloud` を維持（"cloud" の表示名を BYOK に）→ **データ移行不要**。
+- 保存経路(`useJournal`)・storage層は不変のため **test:dataloss 対象外**。`npm run build` 通過。
+
+### 未配線（次に実機環境が整ったら）
+- BYOK の実送信：`callCloud` で `headers` に `x-api-key: aiConfig.apiKey`（＋ `anthropic-version`）を配線。
+- ローカルLLM(`callLocal`)の疎通確認。CORS 等の実挙動確認。
+
+### 次のステップ（この順・確定）
+**→ 候補3：スマホアプリ化の前に、徹底的なコードレビュー。**
+- 今回の一連（3層分離リファクタ ＋ 候補1 IndexedDB ＋ 候補2 BYOKガワ）を総点検する。
+- 観点：3層分離の責務境界／命名／消失対策の穴（ミラー・レガシー移行の端ケース）／
+  IndexedDB アダプタの例外系・並行書込／BYOKガワの整合／未配線箇所の明示。
+- レビュー通過後に初めて配布・ネイティブ化（React Native / Expo 等）の設計へ。

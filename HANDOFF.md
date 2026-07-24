@@ -118,3 +118,31 @@ src/
 2. **IndexedDB アダプタ**（上記の注意点つき）。オフライン堅牢性の底上げ。
 3. **TypeScript 化** … モジュール分割済みで着手しやすくなった。`storage` の契約を型に落とすと安全。
 4. （任意）AIパネル・バックアップ処理を `useAi` / `useBackup` として App から更に分離。
+
+---
+
+## 7. 次フェーズの決定事項（2026-07 確定・この順で進める）
+
+### 候補1：IndexedDB への移行 ← **次セッションの着手点**
+- `storage/` のアダプタを差し替えて IndexedDB 化する。**localStorage とのハイブリッド保存**とする。
+  - 通常の get/set/remove は IndexedDB を正とする。
+  - `beforeunload` 等の同期保存（`useJournal.js` の生命線）は IndexedDB では確実に書けないため、
+    **編集中エントリだけ localStorage にミラー**して保険にする（起動時は両者を突き合わせて復元）。
+- 実装は `localStorageAdapter.js` の契約（get/set/remove/setSync）を満たす `indexedDbAdapter` を作り、
+  `main.jsx` あたりで `setStorageAdapter(indexedDbAdapter)` するだけ。UI・ロジックは無改修。
+- **受け入れ条件：`npm run test:dataloss` が IndexedDB 構成でも 3シナリオ PASS すること（必須）。**
+  消失対策の生命線なので、PASS しない実装は採用しない。
+
+### 候補2：AI機能の決着（BYOK 方式）
+- 方針：**デフォルトはローカルLLM、オプションで APIキー入力の BYOK（Bring Your Own Key）**。
+- **⚠️ 重要な制約：現在はローカルLLMの実通信テストができない環境。**
+  裏側の通信ロジック（`api/client.js` の `callLocal` / `callCloud` の実挙動）は**深追いしない**。
+  今は **設定画面・UIの「ガワ（骨組み）」だけ**を作る：
+  - BYOK 用のAPIキー入力欄、ローカル/BYOK の切替UI、保存導線など。
+  - 通信の疎通確認や認証の実検証は、実機で試せる環境が整ってから。
+- 既存の `components/settings.jsx`（AiSettings）と `api/client.js` を土台に、UIの器を整える範囲に留める。
+
+### 候補3：スマホアプリ化（の前に徹底的なコードレビュー）
+- ネイティブ化（React Native / Expo 等）に進む**前に、徹底的なコードレビューを挟む**。
+- リファクタ直後の今こそ、3層分離の妥当性・命名・責務境界・消失対策の穴を総点検する。
+- レビュー通過後に初めて配布・ネイティブ化の設計へ。

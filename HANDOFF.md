@@ -146,3 +146,23 @@ src/
 - ネイティブ化（React Native / Expo 等）に進む**前に、徹底的なコードレビューを挟む**。
 - リファクタ直後の今こそ、3層分離の妥当性・命名・責務境界・消失対策の穴を総点検する。
 - レビュー通過後に初めて配布・ネイティブ化の設計へ。
+
+---
+
+## 8. 候補1（IndexedDB 移行）完了記録（2026-07 / Claude Code）
+
+**IndexedDB を正とする localStorage ハイブリッド**へ移行。UI・ロジック・フックは無改修。
+
+- `src/storage/indexedDbAdapter.js` を新規追加（契約 name/get/set/remove/setSync は localStorage 版と同一）。
+- `src/main.jsx` で `setStorageAdapter(indexedDbAdapter)` の1点差替えのみ。
+- localStorage はアダプタ内部にのみ残り、**3用途**に閉じ込め（外からは不可視）：
+  1. **ミラー**（`journal_v1_mirror_<key>`）… `beforeunload` の同期保険。IndexedDB は同期書込不可のため。
+     起動時 `get` が突合し IndexedDB へ昇格→ミラー削除。
+  2. **レガシー移行**（`journal_v1_<key>`）… 旧 localStorageAdapter の既存データ。IndexedDB が空なら
+     `get` で読み出し取込む（**既存ユーザの消失防止**）。
+  3. 本体は IndexedDB（`journal_v1/kv`）。
+- `get` の優先順位＝ ミラー ＞ IndexedDB ＞ レガシー。
+- **受入条件クリア**：`npm run test:dataloss` が IndexedDB 構成で全 PASS。
+  生命線として **4)「旧データの IndexedDB 移行」シナリオを恒久追加**（既存3＝自動保存/日付切替/beforeunload に加え）。
+
+次は 候補2（AI/BYOK のガワ）→ 候補3（コードレビュー）。

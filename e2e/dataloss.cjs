@@ -2,6 +2,7 @@
 //   1) 800ms debounce 自動保存 → リロード復元
 //   2) 日付切替時のフラッシュ保存 → 戻ると復元
 //   3) 自動保存前(<800ms)のリロード → beforeunload 同期保存で復元
+//   4) 旧 localStorage データの IndexedDB への移行（既存ユーザの消失防止）
 //
 // 実行:  npm run test:dataloss   （ビルド済み dist を preview で配信して検証）
 //
@@ -80,6 +81,20 @@ async function run() {
     await page.fill(FIELD, text);
     await page.reload({ waitUntil: "networkidle" });
     results.push(["beforeunload save", (await page.inputValue(FIELD)) === text]);
+    await ctx.close();
+  }
+
+  // 4) 旧 localStorage データ（journal_v1_ プレフィックス）が IndexedDB へ移行され復元される
+  {
+    const { ctx, page } = await fresh(browser);
+    const text = "感謝_legacy_" + Date.now();
+    const today = await page.inputValue(DATE);
+    // 旧 localStorageAdapter が書いた形式でシード（IndexedDB は空のまま）
+    await page.evaluate(([d, t]) => {
+      localStorage.setItem("journal_v1_journal-entries", JSON.stringify({ [d]: { grateful: t } }));
+    }, [today, text]);
+    await page.reload({ waitUntil: "networkidle" });
+    results.push(["legacy migration", (await page.inputValue(FIELD)) === text]);
     await ctx.close();
   }
 

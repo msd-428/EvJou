@@ -64,3 +64,57 @@ Vite + React のビルド環境を立てて、npm run dev でブラウザで動�
 - 直近の変更：エラーログ解析機能を実装 → 撤去し、🔥スパルタ人格として集約
 - **プロダクト方針が揺れている**：「個人特化で確定」→ Playストア配布を検討中（未決着）
 - ローカル推論と一般配布が矛盾しており、そこが未解決のまま
+
+---
+
+## 6. リファクタリング完了記録（2026-07 / Claude Code）
+
+単一ファイル `daily-journal.jsx`（約2,400行）を **3層分離アーキテクチャ**へ再構成した。
+挙動は不変（各段階でビルド＋実機ブラウザ検証を実施）。
+
+### 到達点：3層分離＋ローカルファースト基盤
+```
+src/
+├── main.jsx                     ErrorBoundary + App のマウント
+├── daily-journal.jsx            App（オーケストレータ）約720行 ※旧2,377行
+├── constants.js                 色・タブ・フィールド・デフォルト値
+├── components/                  【UI層】状態を持たない表示コンポーネント
+│   ├── ErrorBoundary.jsx        画面全体のクラッシュ防止
+│   ├── common.jsx  journal.jsx  todo.jsx  routine.jsx  schedule.jsx  settings.jsx
+├── features/                    【ロジック層】ドメインごとのフック
+│   ├── useJournal.js ★消失防止機構  useTodos.js  useRoutines.js
+│   ├── useGoals.js  useSchedule.js  useSettings.js
+├── lib/                         純粋ロジック（date / id / json / domain）
+├── api/                         AI通信（client / prompts）
+└── storage/                     【ストレージ層】保存先の抽象化
+    ├── localStorageAdapter.js   現行実装（契約コメントあり）
+    ├── index.js                 ファサード＋アダプタ差し替え点(setStorageAdapter)
+    ├── useStorage.js            単一キー永続化フック
+    └── backup.js                エクスポート/インポート
+```
+
+### 完了した要件
+1. **UIとロジックの分離** … UIは `components/`、状態・ドメインルールは `features/` のフックへ。
+2. **ストレージ層の抽象化** … `useStorage` ＋ アダプタ。保存先変更は `setStorageAdapter` の1点のみ。
+   生の `window.storage` / `localStorage` 直叩きは全廃（`window.storage` 依存も除去）。
+3. **Error Boundary** … `components/ErrorBoundary.jsx` で全体をラップ。
+4. **ビルド環境** … Vite + React（`npm run dev` / `build`）。
+5. **消失対策のテスト常設** … `npm run test:dataloss`（Playwright実機・自己完結）。
+
+### ⚠️ 次に IndexedDB / クラウドへ差し替える人へ（重要）
+- **アダプタを1つ作るだけ**：`localStorageAdapter.js` 冒頭の契約（get/set/remove/setSync）を満たす
+  実装を書き、起動時に `setStorageAdapter(indexedDbAdapter)` を呼ぶ（`main.jsx` あたり）。
+  UI・ロジック・フックは一切変更不要。get/set/remove は最初から Promise 返却で非同期対応済み。
+- **`setSync` の落とし穴**：`beforeunload` の同期保存（`useJournal.js`）は localStorage の同期APIに依存。
+  **IndexedDB は beforeunload で確実な同期書き込みができない**。移行時は
+  「編集中エントリだけ localStorage にミラーする」等の保険を別途用意すること。
+  ここは消失対策の生命線なので、`test:dataloss` を IndexedDB でも必ず通してから採用する。
+- 全リセット時、`useStorage` の自動永続化で各キーが「削除」でなく「空値で再作成」される
+  （このアプリでは空＝欠損で等価。IndexedDB化の際は挙動を再確認）。
+
+### 次のステップ候補（優先順）
+1. **AI推論経路の決着（BYOK / オンデバイス小型LLM）** … 配布方針とセットの最大論点（未着手）。
+   `api/client.js` の `callCloud`（Anthropic直叩き）は通常環境で認証が通らない点も未解決。
+2. **IndexedDB アダプタ**（上記の注意点つき）。オフライン堅牢性の底上げ。
+3. **TypeScript 化** … モジュール分割済みで着手しやすくなった。`storage` の契約を型に落とすと安全。
+4. （任意）AIパネル・バックアップ処理を `useAi` / `useBackup` として App から更に分離。

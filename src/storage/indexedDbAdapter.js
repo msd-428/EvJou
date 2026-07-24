@@ -77,8 +77,10 @@ export const indexedDbAdapter = {
       try { await idbSet(key, mirror); lsRemove(MIRROR_PREFIX + key); } catch {}
       return mirror;
     }
-    // ②通常：IndexedDB を読む。
-    const current = await idbGet(key);
+    // ②通常：IndexedDB を読む。IDB 自体が使えない環境（プライベートモード等）でも
+    //   ③レガシー救済へ退避できるよう、読取失敗は握り潰して null 扱いにする。
+    let current = null;
+    try { current = await idbGet(key); } catch { current = null; }
     if (current != null) return current;
     // ③レガシー移行：IndexedDB が空なら旧 localStorage データを取込む（既存ユーザの消失防止）。
     const legacy = lsRead(LEGACY_PREFIX + key);

@@ -22,10 +22,11 @@ export const PERSONAS = {
 
 // AI接続設定（ローカルLLM or クラウド）。App側でロード時に applyAiConfig で上書きする。
 export const DEFAULT_AI_CONFIG = {
-  mode: "local",                              // "local" | "cloud"
+  mode: "local",                              // "local" | "cloud"(=BYOK)
   localEndpoint: "http://localhost:11434/v1", // Ollama/LM Studio/llama.cpp 等のOpenAI互換
   localModel: "qwen2.5",
   cloudModel: "claude-sonnet-4-20250514",
+  apiKey: "",                                 // BYOK: ユーザ自身のAPIキー（端末内保存）
   temperature: 0.7,                           // ローカル生成の温度
   persona: "spartan",                         // チャットの人格（既定スパルタ）
 };
@@ -52,6 +53,8 @@ async function callLocal(messages, system, maxTokens) {
 }
 
 // クラウド：Anthropic Messages
+// NOTE(BYOK): aiConfig.apiKey は設定画面で保存済み。実機で認証検証できる環境が整ったら
+// ここで x-api-key ヘッダへ配線する（現段階では通信ロジックには手を入れない）。
 async function callCloud(messages, system, maxTokens) {
   const body = { model: aiConfig.cloudModel, max_tokens: maxTokens, messages };
   if (system) body.system = system;

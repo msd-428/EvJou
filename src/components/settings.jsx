@@ -155,10 +155,11 @@ export function AiSettings({ cfg, onSave }) {
     }}>{label}</button>
   );
 
-  const field = (label, key, placeholder) => (
+  const field = (label, key, placeholder, type = "text") => (
     <div style={{ marginBottom:10 }}>
       <label style={{ display:"block", fontSize:12, color:COLORS.textSub, fontWeight:600, marginBottom:4 }}>{label}</label>
       <input value={draft[key]} onChange={e => set(key, e.target.value)} placeholder={placeholder}
+        type={type} autoComplete="off" spellCheck={false}
         style={{ width:"100%", padding:"9px 12px", borderRadius:8, border:`1px solid ${COLORS.border}`, fontSize:13, boxSizing:"border-box" }} />
     </div>
   );
@@ -167,7 +168,7 @@ export function AiSettings({ cfg, onSave }) {
     <div style={{ background:COLORS.bg, borderRadius:12, padding:"14px 16px", marginBottom:24 }}>
       <div style={{ display:"flex", gap:8, marginBottom:12 }}>
         {modeBtn("local", "🖥 ローカル")}
-        {modeBtn("cloud", "☁️ クラウド")}
+        {modeBtn("cloud", "🔑 BYOK")}
       </div>
 
       <label style={{ display:"block", fontSize:12, color:COLORS.textSub, fontWeight:600, marginBottom:4 }}>チャットの人格</label>
@@ -198,7 +199,11 @@ export function AiSettings({ cfg, onSave }) {
         </>
       ) : (
         <>
+          {field("APIキー", "apiKey", "sk-ant-...", "password")}
           {field("モデル名", "cloudModel", "claude-sonnet-4-20250514")}
+          <p style={{ margin:"0 0 6px", fontSize:11, color:COLORS.textSub, lineHeight:1.6 }}>
+            BYOK（自分のAPIキーで利用）。キーは端末内にのみ保存されます。
+          </p>
           <p style={{ margin:"0 0 6px", fontSize:11, color:COLORS.warn, lineHeight:1.6 }}>
             ⚠️ クラウドは日記内容が外部APIに送信されます。
           </p>

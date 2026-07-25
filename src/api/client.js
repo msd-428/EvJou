@@ -25,7 +25,7 @@ export const DEFAULT_AI_CONFIG = {
   mode: "local",                              // "local" | "cloud"(=BYOK)
   localEndpoint: "http://localhost:11434/v1", // Ollama/LM Studio/llama.cpp 等のOpenAI互換
   localModel: "qwen2.5",
-  cloudModel: "claude-sonnet-4-20250514",
+  cloudModel: "claude-sonnet-5",
   apiKey: "",                                 // BYOK: ユーザ自身のAPIキー（端末内保存）
   temperature: 0.7,                           // ローカル生成の温度
   persona: "spartan",                         // チャットの人格（既定スパルタ）

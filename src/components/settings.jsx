@@ -200,7 +200,7 @@ export function AiSettings({ cfg, onSave }) {
       ) : (
         <>
           {field("APIキー", "apiKey", "sk-ant-...", "password")}
-          {field("モデル名", "cloudModel", "claude-sonnet-4-20250514")}
+          {field("モデル名", "cloudModel", "claude-sonnet-5")}
           <p style={{ margin:"0 0 6px", fontSize:11, color:COLORS.textSub, lineHeight:1.6 }}>
             BYOK（自分のAPIキーで利用）。キーは端末内にのみ保存されます。
           </p>

@@ -261,7 +261,7 @@ LS_PREFIX: `journal_v1_`
   mode: "local" | "cloud",
   localEndpoint: string,         // 既定 "http://localhost:11434/v1"
   localModel: string,            // 既定 "qwen2.5"
-  cloudModel: string,            // 既定 "claude-sonnet-4-20250514"
+  cloudModel: string,            // 既定 "claude-sonnet-5"
   temperature: number,           // ローカル生成の温度（既定0.7）
   persona: "spartan" | "normal" | "lover"  // チャット人格（既定 "spartan"）
 }
@@ -302,7 +302,7 @@ LS_PREFIX: `journal_v1_`
 
 ### モデル
 - ローカル：OpenAI互換 `/chat/completions`（Ollama/LM Studio/llama.cpp、既定 `qwen2.5`）
-- クラウド：Anthropic Messages API（既定 `claude-sonnet-4-20250514`）
+- クラウド：Anthropic Messages API（既定 `claude-sonnet-5`）
 - `callClaude()` がモードで分岐。HTTPエラーは `res.ok` チェックで明示throw。
 
 ### 主要プロンプト

@@ -20,7 +20,7 @@ const DATE = 'input[type="date"]';
 const EXEC = process.env.PLAYWRIGHT_CHROMIUM || undefined;
 
 function startPreview() {
-  const p = spawn("npx", ["vite", "preview", "--port", String(PORT), "--strictPort"], { stdio: "ignore" });
+  const p = spawn("npx vite preview --port " + PORT + " --strictPort", { stdio: "ignore", shell: true });
   return p;
 }
 

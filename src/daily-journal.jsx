@@ -10,7 +10,7 @@ import {
   emptyForm, emptyGoals, normalizeRoutines, buildTodaySequence,
   isRoutineDue, scheduleSummary, pruneByDateKey, pruneTodos,
 } from "./lib/domain.js";
-import { PERSONAS, DEFAULT_AI_CONFIG, applyAiConfig, callAI, getAiConfig } from "./api/client.js";
+import { PERSONAS, DEFAULT_AI_CONFIG, applyAiConfig, callAI } from "./api/client.js";
 import {
   storageGet, storageSet, storageRemove, exportData, importDataFile,
 } from "./storage/index.js";
@@ -65,16 +65,16 @@ export default function App() {
   const fileInputRef = useRef(null);
 
   // ─── ドメインフック（状態管理・ロジックを分離） ───
-  const { settings, setSettings, aiCfg, setAiCfg, saveAiCfg, saveSettings } = useSettings();
+  const { settings, aiCfg, setAiCfg, saveAiCfg, saveSettings } = useSettings();
   const {
     todos, setTodos, todoInput, setTodoInput,
-    saveTodos, addTodoManual, toggleTodo, removeTodo,
+    addTodoManual, toggleTodo, removeTodo,
     updateTodoDueDate, updateTodoText, clearDoneTodos, addExtractedTodos,
   } = useTodos(settings);
   const {
     routines, setRoutines, routineChecks, setRoutineChecks,
     routineInput, setRoutineInput, routineSubTab, setRoutineSubTab,
-    saveRoutines, addRoutine, addRoutinesDirect, removeRoutine, moveRoutine, updateRoutineSchedule, toggleRoutineCheck,
+    addRoutine, addRoutinesDirect, removeRoutine, moveRoutine, updateRoutineSchedule, toggleRoutineCheck,
   } = useRoutines(settings);
   const {
     goals, setGoals, goalsEditing, setGoalsEditing, showGoals, setShowGoals, saveGoals,

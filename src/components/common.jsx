@@ -84,8 +84,10 @@ export function EmptyState({ icon, text }) {
 }
 
 export function BottomSheet({ title, onClose, children }) {
+  // inset ショートハンドは Chrome 87+。旧WebView(Chrome 74)は無視して offset が
+  // auto のままになり、オーバーレイが画面全体に広がらない。必ず longhand で書く。
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:200, display:"flex", alignItems:"flex-end" }}>
+    <div style={{ position:"fixed", top:0, right:0, bottom:0, left:0, background:"rgba(0,0,0,.45)", zIndex:200, display:"flex", alignItems:"flex-end" }}>
       <div style={{ background:"#fff", width:"100%", maxWidth:680, margin:"0 auto", borderRadius:"20px 20px 0 0", padding:20, maxHeight:"90vh", overflowY:"auto", boxSizing:"border-box" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
           <h2 style={{ margin:0, fontSize:17, color:"#3a3a3a" }}>{title}</h2>

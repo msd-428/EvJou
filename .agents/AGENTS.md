@@ -67,4 +67,9 @@ All agents working on this workspace must adhere to these rules and understand t
     remaining count, despite the field name.
   - **`ai_requests` is never cleaned up** — completed documents accumulate indefinitely.
 
+## 5. Strict LP & Screenshot Rules
+- **NEVER MODIFY THE APP SOURCE CODE (src/ directory) FOR TEMPORARY SCREENSHOTS OR HACKS.** 
+  The app is being actively developed in another thread. Modifying app code (e.g., `daily-journal.jsx`) for automated screenshot tricks will cause severe merge conflicts and anger the developers. 
+  If you need specific states for screenshots, you must instruct the user to manually paste data or manually navigate to the screen.
+
 </details>

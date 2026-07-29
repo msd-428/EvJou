@@ -55,9 +55,12 @@ export function getTodoGroup(dueDate) {
 // ToDoから導出する派生ビュー。シーケンス自体は保存しない（データはtodosに一元化）。
 // 対象は「期限が今日以前」のToDo。繰り越し（昨日以前）と今日ぶんを分けて返す。
 // 並び順は配列の格納順を維持する（AIが朝→夜の動線順で提案し、その順に追加されるため）。
+// 繰り越しは未完了のみ。完了済みを残すと過去日の消化済みタスクが完了ToDo上限（100件）まで
+// 今日の画面に積み上がり、doneCount も過去の実績で水増しされる。
+// 今日ぶんは完了済みも残す（消化した手応えと doneCount/total の分母がその日の稼働そのものになる）。
 export function buildTodaySequence(todos, today = todayStr()) {
   const inScope = (todos || []).filter(t => t.dueDate && t.dueDate <= today);
-  const carried = inScope.filter(t => t.dueDate < today)
+  const carried = inScope.filter(t => t.dueDate < today && !t.done)
                          .sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
   const todayItems = inScope.filter(t => t.dueDate === today);
   const all = [...carried, ...todayItems];

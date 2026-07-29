@@ -105,9 +105,15 @@ async function claimRequest(docRef, position) {
   });
 }
 
+// queuePosition だけを書く。status には触れない。
+// waiting に載っている時点で claimRequest が既に 'queued' を書いており、ここで書き直す意味は無い。
+// むしろクライアントが待機を諦めて 'cancelled' を書いた文書を 'queued' に巻き戻してしまい、
+// processRequest のキャンセル判定をすり抜けて誰も待っていない推論でGPUを回す（＝渋滞の悪化。
+// callProxy が cancelled を書く目的そのものを潰す）。queuePosition の更新だけでも文書は動くので、
+// クライアント側の生存ハートビートとしては等価。
 async function refreshQueuePositions() {
   await Promise.all(
-    waiting.map((ref, i) => ref.update({ status: 'queued', queuePosition: i + 1 }).catch(() => {}))
+    waiting.map((ref, i) => ref.update({ queuePosition: i + 1 }).catch(() => {}))
   );
 }
 
@@ -256,7 +262,18 @@ async function main() {
       waiting.push(docRef);
       claimRequest(docRef, waiting.length).then((claimed) => {
         if (claimed) {
-          queue.add(() => processRequest(docRef));
+          // processRequest の try は推論部分しか覆っていない。その手前（待機列の整理・
+          // 文書の読み直し）で投げると queue.add の戻り値が未処理の rejection になり、
+          // Node 18+ は既定でプロセスごと落とす。長時間の常駐が前提なので必ず受ける。
+          queue.add(() => processRequest(docRef)).catch((e) => {
+            console.error(`❌ 処理を中断: ReqID=${docRef.id}`, e);
+            docRef.update({
+              status: 'error',
+              error: e?.message || String(e),
+              errorType: 'generic',
+              processedAt: FieldValue.serverTimestamp(),
+            }).catch(() => {});
+          });
           return;
         }
         console.log(`⏭ 他のワーカーが取得済み: ReqID=${docRef.id}`);
@@ -268,6 +285,12 @@ async function main() {
     console.error(`監視エラー: ${err}`);
   });
 }
+
+// 最後の砦。取りこぼした rejection でワーカーが黙って死ぬのが最悪の失敗モード
+// （クライアントは「PCが落ちている」としか分からない）ので、記録して稼働を続ける。
+process.on('unhandledRejection', (e) => {
+  console.error('⚠️ 未処理のPromise拒否（稼働は継続）:', e);
+});
 
 main().catch((e) => {
   console.error('❌ ワーカーの起動に失敗しました:', e);

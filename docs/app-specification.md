@@ -273,7 +273,9 @@ LS_PREFIX: `journal_v1_`
   appTitle, appSubtitle,
   defaultTab, startDateMode,     // "today" | "last"
   showDumpMode, toastSeconds,
-  hiddenFields: string[],
+  // 表示するジャーナル項目（順序込み・設定画面で編集可）。旧 hiddenFields は自動移行される。
+  // todayGoal / tomorrowGoal は ToDo抽出・予定生成の入力源のため削除不可（ラベル変更と並替のみ）。
+  journalFields: { key, label, placeholder, rows, core }[],
   autoExtractOnDump, autoExtractOnSave,
   limitEntriesDays, limitDoneTodos, limitRoutineCheckDays,
   limitRoutinePerTab,

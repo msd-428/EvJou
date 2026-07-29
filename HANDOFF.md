@@ -296,3 +296,112 @@ src/
   ただし **Apple Developer Program の年額費用**が必要で、審査も Play より厳しめ。
 - **iPad はテスト端末として十分機能する**（iPhone向けアプリも実行可）。実機確認の障害にはならない。
 - 判断：**まず Play に出して運用が回ってから iOS**。同時進行はしない（4S・最小構成）。
+
+---
+
+
+## 12. ver 1.1 — EvJou AI 統合（フロントエンド改修）完了記録（2026-07）
+
+BYOK方式から**「EvJou AI（開発者のローカルLLMプロキシ）」をデフォルトとする3モード構成**へ移行。
+バックエンド（プロキシサーバー）は別スレッドで構築済み。本セッションではフロントエンド側の改修を実施。
+
+> **【2026-07 訂正】通信方式は Firestore 経由が正。** 本章には当初 HTTP 直叩き＋Cloudflare Tunnel
+> 案の記述が混ざっていたが、実装・運用ともに **Firestore の `ai_requests` コレクション経由**
+> （アプリが `addDoc` → ワーカーが `onSnapshot` で消化 → 結果を同ドキュメントに書き戻し）で確定。
+> `PROXY_BASE_URL` / Cloudflare Tunnel は**不使用**。詳細は `.agents/AGENTS.md` §1 を正とすること。
+
+### 3モード構成（確定）
+- **`mode: "proxy"`（🤖 EvJou AI）** … デフォルト。ゼロコンフィグ。Firebase匿名ログイン後、Firestore `ai_requests` へリクエスト文書を作成し、ワーカーの書き戻しを `onSnapshot` で待つ（タイムアウト2分）。
+- **`mode: "local"`（🖥 ローカルLLM）** … 既存のまま。ユーザーがエンドポイント/モデル名を設定。
+- **`mode: "cloud"`（🔑 APIキー）** … 既存のBYOK。Anthropic APIキーを設定。`x-api-key` ヘッダ配線済み。
+
+### 変更したファイル
+- **[NEW] `src/lib/firebase.js`** … Firebase遅延初期化・匿名ログイン・`getIdToken(false)` によるトークン取得。
+  Reactに依存しない純粋ロジック。AI通信時にのみ初期化される（アプリ起動時には走らない）。
+- **`src/api/client.js`** … `callClaude` → `callAI` に改名。`callProxy` 新規追加。
+  デフォルトmode を `"proxy"` に変更。戻り値を `{ text, remaining? }` に統一。
+  エラーに `type` プロパティを付与（`rate_limit` / `server_down` / `auth` / `network`）。
+- **`src/api/prompts.js`** / **`src/features/useSchedule.js`** … `callClaude` → `callAI`、`result.text` 対応。
+- **`src/components/settings.jsx`** … 3モードUI。EvJou AIモード時はゼロコンフィグ＋残り回数表示。
+- **`src/daily-journal.jsx`** … 初回同意ダイアログ（`proxyConsent`）、エラー型別メッセージ、
+  残り回数state、ローディング文言改善（5秒後に「順番待ち中」）。
+- **`proxy/index.js`** … Ollama転送先をOpenAI互換（`/v1/chat/completions`）に変更。
+  NDJSON→一括JSON。`X-RateLimit-Remaining` / `X-RateLimit-Limit` ヘッダ追加。
+
+### 変更しなかったファイル（設計意図）
+- `src/storage/*` / `src/features/useJournal.js` / `src/main.jsx` — 保存経路・起動経路は不変。
+- ストレージ層の抽象化のおかげで、AI通信の改修がストレージに一切波及しなかった。
+
+### テスト結果
+- `npm run build` … ✅ PASS（76 modules, gzip 107KB）
+- `npm run test:dataloss` … ✅ 4/4 PASS（autosave / dateswitch / beforeunload / legacy migration）
+
+### ⚠️ 実機での残作業（コード外の設定）
+1. **Firebase Web API キー** … `src/lib/firebase.js` の `FIREBASE_CONFIG.apiKey` に設定。
+   Firebaseコンソール → プロジェクト設定 → ウェブアプリ追加 → 表示される apiKey。
+2. **Firebase匿名認証の有効化** … Firebaseコンソール → Authentication → ログイン方法 → 匿名 → 有効。
+3. **Firestore の有効化とセキュリティルール** … `ai_requests` コレクションを、
+   作成者本人（`uid` 一致）だけが読み書きできるルールにする。ワーカーは Admin SDK なので制限外。
+   ※ URL 設定は不要（Firestore 経由のため公開エンドポイントを持たない）。
+4. **実機疎通確認** … 上記設定後に、EvJou AI / ローカル / BYOK の各モードで動作確認。
+
+### 次のステップ
+1. 上記の残作業（Firebase設定・Firestoreルール・実機確認）を完了する。
+2. プロキシワーカー（`proxy/index.js`）を自宅PCで常駐起動する（ポート開放・Tunnel は不要）。
+3. 実機で3モード全ての動作を検証し、Play ストア配布に向けた最終調整へ進む。
+
+
+---
+
+## 13. レビュー修正 ＋ Dynamic Journal Fields 完了記録（2026-07-29 / Claude Code）
+
+### やったこと
+1. **前セッション実装（Dump Mode ToDo Approval）のレビューと修正**
+   - 🔴 `addRoutineDirect` をループで複数回呼んでいたため、setState 未反映の古い `routines` を
+     基点に上書きが起き、**ルーチンを2件以上承認すると1件しか保存されなかった**。
+     `addRoutinesDirect(texts)` に変更し、1回の更新にまとめた（バッチ内重複・上限も判定）。
+   - `useJournal` の未使用引数 `addExtractedTodos` を削除（承認は App 側の責務に移行済み）。
+   - 提案リストの更新を関数アップデータ化。
+2. **Dynamic Journal Fields**（バックログ消化）… 詳細は `.agents/AGENTS.md` §4。
+3. **ドキュメントの矛盾解消** … §12 の Cloudflare Tunnel 記述に Firestore 正の訂正を追記。
+
+### 設計上の判断（次に触る人が壊しやすい順）
+1. **項目の `key` は絶対に変更しない。** 保存済みエントリとの対応そのもの。編集できるのは表示名だけ。
+   設定UIも label しか書き換えない作りにしてある。
+2. **項目を削除しても `entries` のデータは消さない。** 項目を戻せば過去の記録が再び見える。
+   「見えない＝消えた」にしないこと（消失対策の原則）。
+3. **`settings.journalFields` を `useJournal` の useEffect 依存に入れてはいけない。**
+   設定保存のたびに新しい配列になるため、依存に入れると**入力中の未保存フォームが `entries` の
+   内容で巻き戻る＝消失する**。欠損キーは UI 側で `?? ""` として扱うことで回避している
+   （`useJournal.js` の該当箇所にコメントあり）。
+
+### 検証
+- `npm run build` … ✅ PASS
+- `npm run test:dataloss` … ✅ **4/4 PASS**
+- 実ブラウザ操作で項目の追加/リネーム/並替/削除/永続化/コア項目保護を確認 … ✅ 9/9
+  （使い捨てスクリプトのため未コミット。恒久テスト化はしていない）
+
+### 次のセッションへ
+**→ バックログ最後の1件：Proxy Worker Queueing System（`proxy/index.js`）。**
+
+⚠️ **キューは既に実装済み。作り直さないこと。** `p-queue`（`concurrency: 1` で直列＝GPU OOM回避）、
+`processing` マーク、Ollama の5回リトライ＋`waiting_for_server` まで入っている。
+残作業は**穴を塞ぐこと**で、具体的な指摘は `.agents/AGENTS.md` §4 に列挙した。要点：
+- **最重要：クライアント2分タイムアウトとキュー滞留の衝突。** `api/client.js` の `callProxy` は
+  120秒で reject する。直列処理＋リトライ（待機だけで最大20秒超）だと数件詰まっただけで超える。
+- **`processing` のまま孤児化した文書が復帰しない**（監視クエリが `status == 'pending'` のため）。
+- **UTC日付バグ**：`checkAndIncrementUsage()` の `toISOString().split('T')[0]` は
+  **プロジェクト禁止事項**（日付はローカル基準）。日次カウンタが JST 9時に切り替わる。
+- **上限は実際には課されていない**（カウントアップのみ）。`"無料利用枠"` の分岐は到達不能。
+- **`ai_requests` の完了文書が溜まり続ける**（掃除処理なし）。
+
+フロントは既に「5秒後に『順番待ち中』」へ文言が切り替わる作りになっている。活かせる。
+
+### 製品方針 — オフライン優先の段階戦略（2026-07-29 決定・`docs/user-context.md` が正）
+「一生オフラインのみ」ではない。フェーズを分ける戦略なので、取り違えないこと。
+- **フェーズ1（当面の最優先）＝完全オフラインがデフォルト。** アカウント不要・端末内完結。
+  テスト版を広める際の最初のフックが「手軽さ」と「ローカル完結の安心感」。
+- **フェーズ2（リリース後）＝アカウント登録による端末間クラウド同期を"オプション"で提供する構想あり。**
+  **ただし実装は後回し。** 同期を前提にした設計変更・データモデル変更を先回りで入れないこと。
+  （ストレージ層は抽象化済みなので、後からアダプタを足せばよい）
+- フェーズ2は**個人の端末間同期**の話。不採用一覧の**企業向け展開（マルチユーザー・サーバDB）とは別物**。

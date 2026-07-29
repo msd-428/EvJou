@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useStorage } from "../storage/useStorage.js";
 import { storageSet, storageSetSync } from "../storage/index.js";
+import { App as CapApp } from '@capacitor/app';
 import { todayStr } from "../lib/date.js";
 import { emptyForm, normalizeSequence, pruneByDateKey } from "../lib/domain.js";
 import { dumpProcess, extractTodos } from "../api/prompts.js";
+import { uid } from "../lib/id.js";
 
 // ジャーナル本体ドメイン：日記エントリ・選択日・入力フォーム・ダンプ整理・保存トースト。
 // アプリの生命線である「手入力の消失防止」機構（800ms自動保存 / 日付切替フラッシュ /
@@ -12,16 +14,21 @@ import { dumpProcess, extractTodos } from "../api/prompts.js";
 //   - 日付切替: フラッシュで setEntries に加え storageSet も明示（保険）
 //   - リロード: beforeunload で storageSetSync（同期・await不可の局面）
 //
-// 横断データ（settings / goals / addExtractedTodos）は引数で受け取る。
-export function useJournal({ settings, goals, addExtractedTodos }) {
+// 横断データ（settings / goals）は引数で受け取る。
+// AI抽出結果は proposedTodos として提示するだけで、ToDo/ルーチンへの投入は App 側が行う
+// （他ドメインへ直接手を伸ばさない）。
+export function useJournal({ settings, goals }) {
+  const fields = settings.journalFields;   // useSettings が正規化済みで渡す
   const [entries, setEntries] = useStorage("journal-entries", {});
-  const [form, setForm] = useState(emptyForm());
+  const [form, setForm] = useState(emptyForm(fields));
   const [selDate, setSelDate] = useState(todayStr());
   const [saved, setSaved] = useState(false);
 
-  const [dumpText, setDumpText] = useState("");
+  const [dumpText, setDumpText] = useState("今日はとても疲れた。明日は午前中に資料作成を終わらせて、午後から新しい技術の勉強をする。毎日寝る前にストレッチをする習慣をつけたい。");
   const [dumpLoading, setDumpLoading] = useState(false);
   const [showDump, setShowDump] = useState(false);
+
+  const [proposedTodos, setProposedTodos] = useState([]);
 
   const [showSaveToast, setShowSaveToast] = useState(false);
   const saveToastTimer = useRef(null);
@@ -41,14 +48,18 @@ export function useJournal({ settings, goals, addExtractedTodos }) {
   // 日付変更時にフォーム同期（同期は外部由来なのでdirtyを立てない）
   useEffect(() => {
     if (entries[selDate]) {
-      const entry = { ...emptyForm(), ...entries[selDate] };
+      const entry = { ...emptyForm(fields), ...entries[selDate] };
       entry.sequence = normalizeSequence(entry.sequence);
       entry.sequenceChecks = entry.sequenceChecks || {};
       setForm(entry);
     } else {
-      setForm(emptyForm());
+      setForm(emptyForm(fields));
     }
     dirtyRef.current = false;
+    // fields は依存に入れない：設定保存のたびに新しい配列になるため、入れると
+    // 未保存の入力中フォームが entries の内容で巻き戻される（消失につながる）。
+    // 項目を増やした直後の欠損キーは UI 側で "" として扱う。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selDate, entries]);
 
   // 編集後しばらくで自動保存（保存ボタン押し忘れ対策）
@@ -75,15 +86,27 @@ export function useJournal({ settings, goals, addExtractedTodos }) {
     };
   }, [selDate]);
 
-  // リロード/閉じる時の保険（同期保存）
+  // リロード/閉じる時（Web）およびバックグラウンド遷移時（Capacitorネイティブ）の保険（同期保存）
   useEffect(() => {
     const h = () => {
       if (!dirtyRef.current) return;
       const updated = { ...entriesRef.current, [selDateRef.current]: formRef.current };
       storageSetSync("journal-entries", updated);
     };
+    
+    // Web用 (beforeunload)
     window.addEventListener("beforeunload", h);
-    return () => window.removeEventListener("beforeunload", h);
+    
+    // Capacitor (Android/iOS) 用: バックグラウンドに回った時に保存
+    let stateListener = null;
+    CapApp.addListener('appStateChange', ({ isActive }) => {
+      if (!isActive) h();
+    }).then(listener => { stateListener = listener; }).catch(() => {});
+
+    return () => {
+      window.removeEventListener("beforeunload", h);
+      if (stateListener) stateListener.remove();
+    };
   }, []);
 
   // 「最後に開いた日」モード時、選択日を記憶
@@ -112,7 +135,9 @@ export function useJournal({ settings, goals, addExtractedTodos }) {
     if (!settings.autoExtractOnSave) return;
     try {
       const extracted = await extractTodos(form.todayGoal, form.tomorrowGoal);
-      addExtractedTodos(extracted, selDate);
+      if (extracted?.length > 0) {
+        setProposedTodos(extracted.map(e => ({ id: uid(), text: e.text, when: e.when || "today", selected: true })));
+      }
     } catch {}
   };
 
@@ -121,15 +146,9 @@ export function useJournal({ settings, goals, addExtractedTodos }) {
     if (!dumpText.trim()) { alert("ダンプ内容を入力してください"); return; }
     setDumpLoading(true);
     try {
-      const result = await dumpProcess(dumpText, form, goals);
-      const newForm = {
-        grateful: result.grateful || form.grateful || "",
-        todayGoal: result.todayGoal || form.todayGoal || "",
-        tomorrowGoal: result.tomorrowGoal || form.tomorrowGoal || "",
-        memo: result.memo || form.memo || "",
-        sequence: result.sequence,
-        sequenceChecks: {},
-      };
+      const result = await dumpProcess(dumpText, form, goals, fields);
+      const newForm = { sequence: result.sequence, sequenceChecks: {} };
+      for (const f of fields) newForm[f.key] = result[f.key] || form[f.key] || "";
       setForm(newForm);
       dirtyRef.current = false;
       saveEntryState(newForm);
@@ -137,7 +156,9 @@ export function useJournal({ settings, goals, addExtractedTodos }) {
 
       if (settings.autoExtractOnDump) try {
         const extracted = await extractTodos(newForm.todayGoal, newForm.tomorrowGoal);
-        addExtractedTodos(extracted, selDate);
+        if (extracted?.length > 0) {
+          setProposedTodos(extracted.map(e => ({ id: uid(), text: e.text, when: e.when || "today", selected: true })));
+        }
       } catch {}
     } catch (err) {
       alert("整理に失敗しました: " + err.message);
@@ -168,7 +189,7 @@ export function useJournal({ settings, goals, addExtractedTodos }) {
   return {
     entries, setEntries, form, setForm, selDate, setSelDate, saved,
     dumpText, setDumpText, dumpLoading, showDump, setShowDump,
-    showSaveToast, hideToast,
+    showSaveToast, hideToast, proposedTodos, setProposedTodos,
     updateField, saveEntry, runDumpProcess, clearDump, toggleSequenceCheck,
   };
 }

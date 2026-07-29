@@ -1,8 +1,10 @@
-// AI通信クライアント。ローカルLLM（OpenAI互換）とクラウド（Anthropic）をモードで分岐。
+// AI通信クライアント。3モード分岐: proxy（EvJou AI） / local（ローカルLLM） / cloud（BYOK）。
 //
-// ⚠️ 配布時の注意：callCloud は Anthropic API をブラウザから直叩きしている。
-// アーティファクト環境ではキーが自動注入されていたが、通常環境では認証が通らない。
-// 配布向けのAI推論経路（BYOK / オンデバイス小型LLM）は未決着の最大論点。
+// ver 1.1: callClaude → callAI に改名。callProxy 追加（Firebase匿名認証 + プロキシ経由）。
+// 戻り値を { text, remaining? } オブジェクトに統一。
+
+import { ensureAuth, getDb } from "../lib/firebase.js";
+import { collection, addDoc, onSnapshot, serverTimestamp, doc } from "firebase/firestore";
 
 // AIチャットの人格（チャットのみに適用。分析系はフラットに保つ）
 export const PERSONAS = {
@@ -20,22 +22,84 @@ export const PERSONAS = {
   },
 };
 
-// AI接続設定（ローカルLLM or クラウド）。App側でロード時に applyAiConfig で上書きする。
+// AI接続設定。App側でロード時に applyAiConfig で上書きする。
 export const DEFAULT_AI_CONFIG = {
-  mode: "local",                              // "local" | "cloud"(=BYOK)
-  localEndpoint: "http://localhost:11434/v1", // Ollama/LM Studio/llama.cpp 等のOpenAI互換
+  mode: "proxy",                                // "proxy"(=EvJou AI) | "local" | "cloud"(=BYOK)
+  localEndpoint: "http://localhost:11434/v1",   // Ollama/LM Studio/llama.cpp 等のOpenAI互換
   localModel: "qwen2.5",
   cloudModel: "claude-sonnet-5",
-  apiKey: "",                                 // BYOK: ユーザ自身のAPIキー（端末内保存）
-  temperature: 0.7,                           // ローカル生成の温度
-  persona: "spartan",                         // チャットの人格（既定スパルタ）
+  apiKey: "",                                   // BYOK: ユーザ自身のAPIキー（端末内保存）
+  temperature: 0.7,                             // 生成の温度
+  persona: "spartan",                           // チャットの人格（既定スパルタ）
+  proxyConsent: false,                          // EvJou AI 初回同意フラグ
 };
 
 let aiConfig = { ...DEFAULT_AI_CONFIG };
 export const applyAiConfig = (cfg) => { aiConfig = { ...DEFAULT_AI_CONFIG, ...cfg }; };
 export const getAiConfig = () => aiConfig;
 
-// ローカル：OpenAI互換 /chat/completions
+// ── エラーヘルパー ──
+// type: "rate_limit" | "server_down" | "auth" | "network" | "generic"
+function aiError(message, type = "generic") {
+  const err = new Error(message);
+  err.type = type;
+  return err;
+}
+
+// ── proxy: EvJou AI（Firestore経由のバケツリレー） ──
+async function callProxy(messages, system, maxTokens, onStatusChange) {
+  const user = await ensureAuth();
+  const db = getDb();
+  const msgs = system ? [{ role: "system", content: system }, ...messages] : messages;
+
+  let reqRef;
+  try {
+    reqRef = await addDoc(collection(db, "ai_requests"), {
+      uid: user.uid,
+      messages: msgs,
+      maxTokens,
+      temperature: aiConfig.temperature,
+      status: "pending",
+      createdAt: serverTimestamp(),
+    });
+  } catch (e) {
+    throw aiError("通信エラー。インターネット接続を確認してください。", "network");
+  }
+
+  return new Promise((resolve, reject) => {
+    // タイムアウト設定（2分）: ワーカー(PC)が起動していない場合などのフェイルセーフ
+    const timeout = setTimeout(() => {
+      unsubscribe();
+      reject(aiError("AIサーバーからの応答がタイムアウトしました。自宅PCが起動しているか確認してください。", "server_down"));
+    }, 120000);
+
+    const unsubscribe = onSnapshot(doc(db, "ai_requests", reqRef.id), (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      
+      if (data.status === "pending" || data.status === "processing" || data.status === "waiting_for_server") {
+        onStatusChange?.(data.status);
+      } else if (data.status === "completed") {
+        clearTimeout(timeout);
+        unsubscribe();
+        resolve({
+          text: data.response || "",
+          remaining: data.remaining != null ? data.remaining : null,
+        });
+      } else if (data.status === "error") {
+        clearTimeout(timeout);
+        unsubscribe();
+        reject(aiError(data.error || "AIサーバーエラーが発生しました。", data.errorType || "generic"));
+      }
+    }, (error) => {
+      clearTimeout(timeout);
+      unsubscribe();
+      reject(aiError("データベースの監視に失敗しました。", "network"));
+    });
+  });
+}
+
+// ── local: OpenAI互換 /chat/completions ──
 async function callLocal(messages, system, maxTokens) {
   const msgs = system ? [{ role: "system", content: system }, ...messages] : messages;
   const url = aiConfig.localEndpoint.replace(/\/$/, "") + "/chat/completions";
@@ -52,15 +116,15 @@ async function callLocal(messages, system, maxTokens) {
   return data?.choices?.[0]?.message?.content || "";
 }
 
-// クラウド：Anthropic Messages
-// NOTE(BYOK): aiConfig.apiKey は設定画面で保存済み。実機で認証検証できる環境が整ったら
-// ここで x-api-key ヘッダへ配線する（現段階では通信ロジックには手を入れない）。
+// ── cloud: Anthropic Messages（BYOK） ──
 async function callCloud(messages, system, maxTokens) {
   const body = { model: aiConfig.cloudModel, max_tokens: maxTokens, messages };
   if (system) body.system = system;
+  const headers = { "Content-Type": "application/json", "anthropic-version": "2023-06-01" };
+  if (aiConfig.apiKey) headers["x-api-key"] = aiConfig.apiKey;
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -71,8 +135,12 @@ async function callCloud(messages, system, maxTokens) {
   return (data.content || []).map(b => b.text || "").join("");
 }
 
-export async function callClaude(messages, system, maxTokens = 1200) {
-  return aiConfig.mode === "local"
-    ? callLocal(messages, system, maxTokens)
-    : callCloud(messages, system, maxTokens);
+// ── 統一エントリポイント ──
+// 戻り値: { text: string, remaining?: number }
+export async function callAI(messages, system, maxTokens = 1200, onStatusChange = null) {
+  if (aiConfig.mode === "proxy") return callProxy(messages, system, maxTokens, onStatusChange);
+  const text = aiConfig.mode === "local"
+    ? await callLocal(messages, system, maxTokens)
+    : await callCloud(messages, system, maxTokens);
+  return { text };
 }

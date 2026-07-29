@@ -1,0 +1,9 @@
+services:
+  worker:
+    build: .
+    container_name: evjou-firestore-worker
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # Windows側のOllamaに接続するため
+    restart: always

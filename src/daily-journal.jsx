@@ -3,14 +3,14 @@ import { useState, useEffect, useRef } from "react";
 // 定数・ロジック・ストレージ・UIコンポーネントは各モジュールへ分離済み。
 // このファイルは各フックとUIを組み立てる App（オーケストレータ）のみを担う。
 import {
-  JOURNAL_FIELDS, COLORS, MAIN_TABS, ROUTINE_TABS, AI_SUB_TABS, DEFAULT_SETTINGS,
+  COLORS, MAIN_TABS, ROUTINE_TABS, AI_SUB_TABS, DEFAULT_SETTINGS,
 } from "./constants.js";
 import { fmtDate, fmtShort, getRecentDates } from "./lib/date.js";
 import {
   emptyForm, emptyGoals, normalizeSequence, normalizeRoutines,
   isRoutineDue, scheduleSummary, pruneByDateKey, pruneTodos,
 } from "./lib/domain.js";
-import { PERSONAS, DEFAULT_AI_CONFIG, applyAiConfig, callClaude } from "./api/client.js";
+import { PERSONAS, DEFAULT_AI_CONFIG, applyAiConfig, callAI, getAiConfig } from "./api/client.js";
 import {
   storageGet, storageSet, storageRemove, exportData, importDataFile,
 } from "./storage/index.js";
@@ -46,6 +46,8 @@ export default function App() {
   const [trendLoading, setTrendLoading] = useState(false);
   const [goalsText, setGoalsText] = useState("");
   const [goalsLoading, setGoalsLoading] = useState(false);
+  const [aiRemaining, setAiRemaining] = useState(null);
+  const [aiLoadingStatus, setAiLoadingStatus] = useState("idle");
   const chatEndRef = useRef(null);
 
   const [importError, setImportError] = useState("");
@@ -63,7 +65,7 @@ export default function App() {
   const {
     routines, setRoutines, routineChecks, setRoutineChecks,
     routineInput, setRoutineInput, routineSubTab, setRoutineSubTab,
-    saveRoutines, addRoutine, removeRoutine, moveRoutine, updateRoutineSchedule, toggleRoutineCheck,
+    saveRoutines, addRoutine, addRoutinesDirect, removeRoutine, moveRoutine, updateRoutineSchedule, toggleRoutineCheck,
   } = useRoutines(settings);
   const {
     goals, setGoals, goalsEditing, setGoalsEditing, showGoals, setShowGoals, saveGoals,
@@ -76,9 +78,22 @@ export default function App() {
   const {
     entries, setEntries, form, setForm, selDate, setSelDate, saved,
     dumpText, setDumpText, dumpLoading, showDump, setShowDump,
-    showSaveToast, hideToast,
+    showSaveToast, hideToast, proposedTodos, setProposedTodos,
     updateField, saveEntry, runDumpProcess, clearDump, toggleSequenceCheck,
-  } = useJournal({ settings, goals, addExtractedTodos });
+  } = useJournal({ settings, goals });
+
+  // AI提案タスクの承認。ToDo・ルーチンそれぞれ 1回の更新にまとめてから投入する。
+  const handleApproveProposed = () => {
+    const selected = proposedTodos.filter(p => p.selected);
+    const toTodo = selected.filter(p => p.when !== "routine").map(p => ({ text: p.text, when: p.when }));
+    const toRoutine = selected.filter(p => p.when === "routine").map(p => p.text);
+
+    if (toTodo.length > 0) addExtractedTodos(toTodo, selDate);
+    const rejected = toRoutine.length > 0 ? addRoutinesDirect(toRoutine) : 0;
+    if (rejected > 0) alert(`${rejected}件のルーチンは上限超過または重複のため追加できませんでした。`);
+
+    setProposedTodos([]);
+  };
 
   // 初期ロード（日記本体と、起動時の表示設定）
   // 設定・各ドメインの値は各フックが useStorage で自ロードする。
@@ -98,6 +113,31 @@ export default function App() {
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMsgs, chatLoading]);
 
+  // EvJou AI 初回同意チェック。同意済みなら true、未同意なら確認ダイアログを出す。
+  const checkProxyConsent = () => {
+    if (aiCfg.mode !== "proxy" || aiCfg.proxyConsent) return true;
+    if (window.confirm("EvJou AIを利用すると、日記の内容が開発者のサーバーに送信されます。\nサーバー上にデータは保存されません。\n\n利用しますか？")) {
+      const next = { ...aiCfg, proxyConsent: true };
+      saveAiCfg(next);
+      return true;
+    }
+    return false;
+  };
+
+  // AI呼び出し結果から残り回数を更新
+  const updateRemaining = (result) => {
+    if (result?.remaining != null) setAiRemaining(result.remaining);
+  };
+
+  // AIエラーのメッセージ生成
+  const aiErrorMessage = (err) => {
+    if (err?.type === "rate_limit") return "AI利用制限に達しました。しばらくしてからお試しください。";
+    if (err?.type === "server_down") return "AIサーバーがメンテナンス中です。日記やToDoは通常通り使えます。";
+    if (err?.type === "auth") return "認証に失敗しました。アプリを再起動してください。";
+    if (err?.type === "network") return "インターネット接続を確認してください。";
+    return "AI接続エラーが発生しました。";
+  };
+
   const todaySched = generatedScheds[selDate] || null;
   const sortedDates = Object.keys(entries).sort().reverse();
 
@@ -111,15 +151,13 @@ export default function App() {
     const routineLine = dueR.length ? `${rDone}/${dueR.length} 達成（${dueR.map(r => (dc[r.id] ? "✓" : "□") + r.text).join("、")}）` : "対象なし";
     const sched = (generatedScheds[date] || []).map(b => `${b.time} ${b.label}`).join(" / ") || "未生成";
     const persona = PERSONAS[aiCfg.persona] || PERSONAS.spartan;
+    const journalLines = settings.journalFields.map(f => `【${f.label}】${e[f.key] || "未記入"}`).join("\n");
     return `${persona.tone}
 以下は${fmtDate(date)}のジャーナルエントリだ。この人格を最後まで崩さず会話すること。
 【大目標】${goals.bigGoal || "未設定"}
 【中目標】${goals.midGoal || "未設定"}
 【近目標】${goals.nearGoal || "未設定"}
-【今日ありがたいこと】${e.grateful || "未記入"}
-【今日の目標】${e.todayGoal || "未記入"}
-【明日の目標】${e.tomorrowGoal || "未記入"}
-【ひとこと】${e.memo || "未記入"}
+${journalLines}
 【未完了ToDo】
 ${openTodos}
 【本日のルーチン】${routineLine}
@@ -128,49 +166,64 @@ ${openTodos}
   };
 
   const startChat = async (date) => {
+    if (!checkProxyConsent()) return;
     setAiSubTab("chat"); setTab("ai"); setChatMsgs([]); setChatLoading(true);
     try {
-      const reply = await callClaude(
+      const result = await callAI(
         [{ role: "user", content: "今日のエントリをまとめてコメントしてください。" }],
-        buildChatSystem(date)
+        buildChatSystem(date),
+        1200,
+        (status) => setAiLoadingStatus(status)
       );
-      setChatMsgs([{ role: "assistant", content: reply }]);
-    } catch {
-      setChatMsgs([{ role: "assistant", content: "エラーが発生しました。" }]);
+      updateRemaining(result);
+      setChatMsgs([{ role: "assistant", content: result.text }]);
+    } catch (err) {
+      setChatMsgs([{ role: "assistant", content: aiErrorMessage(err) }]);
     }
     setChatLoading(false);
+    setAiLoadingStatus("idle");
   };
 
   const sendChat = async () => {
     if (!chatInput.trim() || chatLoading) return;
+    if (!checkProxyConsent()) return;
     const next = [...chatMsgs, { role: "user", content: chatInput.trim() }];
     setChatMsgs(next); setChatInput(""); setChatLoading(true);
     try {
-      const reply = await callClaude(next, buildChatSystem(selDate));
-      setChatMsgs([...next, { role: "assistant", content: reply }]);
-    } catch {
-      setChatMsgs([...next, { role: "assistant", content: "エラーが発生しました。" }]);
+      const result = await callAI(next, buildChatSystem(selDate), 1200, (status) => setAiLoadingStatus(status));
+      updateRemaining(result);
+      setChatMsgs([...next, { role: "assistant", content: result.text }]);
+    } catch (err) {
+      setChatMsgs([...next, { role: "assistant", content: aiErrorMessage(err) }]);
     }
     setChatLoading(false);
+    setAiLoadingStatus("idle");
   };
 
   const runTrend = async () => {
+    if (!checkProxyConsent()) return;
     setAiSubTab("trend"); setTrendLoading(true);
     const recent = Object.keys(entries).sort().slice(-7).map(d => {
       const e = entries[d];
-      return `=== ${fmtDate(d)} ===\n目標: ${e.todayGoal}\n感謝: ${e.grateful}\nひとこと: ${e.memo || ""}`;
+      const body = settings.journalFields.map(f => `${f.label}: ${e[f.key] || ""}`).join("\n");
+      return `=== ${fmtDate(d)} ===\n${body}`;
     }).join("\n\n");
     try {
-      setTrendText(await callClaude([{ role: "user", content: "以下の直近の日記を分析し、傾向・成長・アドバイスをください。\n\n" + recent }]));
-    } catch { setTrendText("エラーが発生しました。"); }
+      const result = await callAI([{ role: "user", content: "以下の直近の日記を分析し、傾向・成長・アドバイスをください。\n\n" + recent }], null, 1200, (status) => setAiLoadingStatus(status));
+      updateRemaining(result);
+      setTrendText(result.text);
+    } catch (err) { setTrendText(aiErrorMessage(err)); }
     setTrendLoading(false);
+    setAiLoadingStatus("idle");
   };
 
   const runGoals = async () => {
+    if (!checkProxyConsent()) return;
     setAiSubTab("goals"); setGoalsLoading(true);
     const recent = Object.keys(entries).sort().slice(-14).map(d => {
       const e = entries[d];
-      return `${fmtDate(d)}: 今日の目標=「${e.todayGoal || ""}」 感謝=「${e.grateful || ""}」`;
+      const body = settings.journalFields.map(f => `${f.label}=「${e[f.key] || ""}」`).join(" ");
+      return `${fmtDate(d)}: ${body}`;
     }).join("\n");
     const openTodos = todos.filter(t => !t.done).map(t => `・${t.text}`).join("\n") || "なし";
     const recentDates = getRecentDates(settings.statsLongDays);
@@ -199,9 +252,14 @@ ${routineSummary}
 1. 最近の行動は各目標にどれだけ近づいているか
 2. 目標との乖離や注意すべきパターン
 3. 目標達成のための具体的な次のアクション提案`;
-    try { setGoalsText(await callClaude([{ role: "user", content: prompt }])); }
-    catch { setGoalsText("エラーが発生しました。"); }
+    try {
+      const result = await callAI([{ role: "user", content: prompt }], null, 1200, (status) => setAiLoadingStatus(status));
+      updateRemaining(result);
+      setGoalsText(result.text);
+    }
+    catch (err) { setGoalsText(aiErrorMessage(err)); }
     setGoalsLoading(false);
+    setAiLoadingStatus("idle");
   };
 
   // ─── 設定 ───
@@ -248,7 +306,7 @@ ${routineSummary}
     setBaseList([]); setActiveBaseId(null); setGeneratedScheds({});
     setRoutines({ active: [], done: [] }); setRoutineChecks({}); setTodos([]);
     setAiCfg(DEFAULT_AI_CONFIG); applyAiConfig(DEFAULT_AI_CONFIG);
-    setSettings(DEFAULT_SETTINGS);
+    saveSettings(DEFAULT_SETTINGS);   // journalFields を正規化して戻す
     setForm(emptyForm());
     alert("全データを削除しました");
   };
@@ -328,7 +386,7 @@ ${routineSummary}
       {showSettings && (
         <BottomSheet title="⚙️ アプリ設定" onClose={() => { setShowSettings(false); setImportError(""); setImportSuccess(false); }}>
           <p style={{ margin:"0 0 12px", fontWeight:700, fontSize:13, color:"#aaa", letterSpacing:1 }}>AI接続</p>
-          <AiSettings cfg={aiCfg} onSave={saveAiCfg} />
+          <AiSettings cfg={aiCfg} onSave={saveAiCfg} aiRemaining={aiRemaining} />
 
           <p style={{ margin:"0 0 12px", fontWeight:700, fontSize:13, color:"#aaa", letterSpacing:1 }}>表示・動作</p>
           <GeneralSettings settings={settings} onSave={saveSettings} />
@@ -433,14 +491,49 @@ ${routineSummary}
             </div>
           </CollapseSection>
 
-          {JOURNAL_FIELDS.filter(f => !settings.hiddenFields.includes(f.key)).map(f => (
+          {settings.journalFields.map(f => (
             <div key={f.key} style={{ marginBottom:16 }}>
               <label style={{ display:"block", fontWeight:700, color:"#3a3a3a", fontSize:14, marginBottom:6 }}>{f.label}</label>
-              <textarea value={form[f.key]} onChange={e => updateField(f.key, e.target.value)}
+              {/* 項目を追加した直後はフォームにキーが無いので "" で埋める（非制御化を防ぐ） */}
+              <textarea value={form[f.key] ?? ""} onChange={e => updateField(f.key, e.target.value)}
                 placeholder={f.placeholder} rows={f.rows}
                 style={{ width:"100%", padding:"10px 12px", borderRadius:10, border:"1px solid #e0dcd5", fontSize:14, resize:"vertical", background:"#fff", boxSizing:"border-box", lineHeight:1.6, color:"#333" }} />
             </div>
           ))}
+
+          {proposedTodos.length > 0 && (
+            <div style={{ padding: "14px 16px", background: "#f0eeff", borderRadius: 12, marginBottom: 16, border: "2px solid #c4bfff", boxShadow: "0 4px 12px rgba(108,99,255,0.15)" }}>
+              <h4 style={{ margin: "0 0 12px", color: "#6c63ff", fontSize: 15, display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 18 }}>✨</span> AIからの提案タスク
+              </h4>
+              <p style={{ margin: "0 0 12px", fontSize: 12, color: "#666" }}>追加先を選んで承認してください。</p>
+              <div style={{ display:"flex", flexDirection:"column", gap: 8, marginBottom: 16 }}>
+                {proposedTodos.map((p) => (
+                  <div key={p.id} style={{ display:"flex", alignItems:"center", gap: 10, background:"#fff", padding: "10px 12px", borderRadius: 8, border: "1px solid #e0dcd5" }}>
+                    <input type="checkbox" checked={p.selected} onChange={e => {
+                      const checked = e.target.checked;
+                      setProposedTodos(prev => prev.map(item => item.id === p.id ? { ...item, selected: checked } : item));
+                    }} style={{ width: 18, height: 18, accentColor: "#6c63ff", cursor: "pointer", margin: 0 }} />
+                    <span style={{ flex: 1, fontSize: 14, color: p.selected ? "#333" : "#aaa", textDecoration: p.selected ? "none" : "line-through", wordBreak: "break-word" }}>
+                      {p.text}
+                    </span>
+                    <select value={p.when} disabled={!p.selected} onChange={e => {
+                      const when = e.target.value;
+                      setProposedTodos(prev => prev.map(item => item.id === p.id ? { ...item, when } : item));
+                    }} style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", fontSize: 12, background: p.selected ? "#fafafa" : "#eee", color: p.selected ? "#333" : "#999", outline: "none", cursor: p.selected ? "pointer" : "default" }}>
+                      <option value="today">今日のToDo</option>
+                      <option value="tomorrow">明日のToDo</option>
+                      <option value="routine">ルーティン</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display:"flex", gap: 8 }}>
+                <Btn variant="primary" onClick={handleApproveProposed} style={{ flex: 2, padding: "11px", fontWeight: 700 }}>✅ 選択したものを追加</Btn>
+                <Btn variant="ghost" onClick={() => setProposedTodos([])} style={{ flex: 1, padding: "11px", color: "#888" }}>すべて破棄</Btn>
+              </div>
+            </div>
+          )}
 
           <div style={{ display:"flex", gap:8 }}>
             <Btn variant={saved ? "success" : "primary"} onClick={saveEntry} style={{ flex:2, padding:"13px" }}>
@@ -513,7 +606,7 @@ ${routineSummary}
                 )}
               </div>
 
-              <Btn variant="primary" disabled={schedLoading || !activeBase} onClick={() => generateSchedule({ selDate, entry: entries[selDate] || form, goals })}
+              <Btn variant="primary" disabled={schedLoading || !activeBase} onClick={() => generateSchedule({ selDate, entry: entries[selDate] || form, goals, fields: settings.journalFields })}
                 style={{ width:"100%", padding:"13px", fontSize:15, marginBottom:16 }}>
                 {schedLoading ? "⏳ スケジュール生成中..." : "✨ 今日のスケジュールを生成"}
               </Btn>
@@ -653,7 +746,13 @@ ${routineSummary}
                 })}
                 {chatLoading && (
                   <div style={{ display:"flex", justifyContent:"flex-start", marginBottom:12 }}>
-                    <div style={{ padding:"10px 16px", borderRadius:"18px 18px 18px 4px", background:"#f0eeff", color:"#888", fontSize:14 }}>考え中...</div>
+                    <div style={{ padding:"10px 16px", borderRadius:"18px 18px 18px 4px", background:"#f0eeff", color:"#888", fontSize:14 }}>
+                      {aiLoadingStatus === "waiting_for_server"
+                        ? "AIサーバーの応答を待っています..."
+                        : aiLoadingStatus === "pending"
+                          ? "順番待ち中..."
+                          : "AIが考え中..."}
+                    </div>
                   </div>
                 )}
                 <div ref={chatEndRef} />
@@ -690,7 +789,7 @@ ${routineSummary}
                         <Btn variant="outline" small onClick={() => { setSelDate(d); startChat(d); }}>🤖 AIと話す</Btn>
                       </div>
                     </div>
-                    {JOURNAL_FIELDS.filter(f => !settings.hiddenFields.includes(f.key)).map(f => e[f.key] && (
+                    {settings.journalFields.map(f => e[f.key] && (
                       <div key={f.key} style={{ marginBottom:7 }}>
                         <span style={{ fontSize:11, color:"#aaa", fontWeight:600 }}>{f.label}</span>
                         <p style={{ margin:"2px 0 0", fontSize:13, color:"#444", lineHeight:1.6 }}>{e[f.key]}</p>

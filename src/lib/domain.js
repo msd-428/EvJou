@@ -3,9 +3,41 @@
 
 import { uid } from "./id.js";
 import { todayStr, getOffsetDate, getEndOfWeek } from "./date.js";
-import { LIMITS, WEEKDAYS } from "../constants.js";
+import { LIMITS, WEEKDAYS, DEFAULT_JOURNAL_FIELDS, CORE_FIELD_KEYS } from "../constants.js";
 
-export const emptyForm = () => ({ grateful: "", todayGoal: "", tomorrowGoal: "", memo: "", sequence: [], sequenceChecks: {} });
+// ─── ジャーナル項目 ───
+// 項目定義を正規化する。旧 settings.hiddenFields（表示/非表示だけの時代）からの移行もここで吸収。
+// コア項目は削除不可なので、欠けていれば既定値から復元する。
+export function normalizeJournalFields(fields, hiddenFields) {
+  const source = Array.isArray(fields) && fields.length > 0
+    ? fields
+    : DEFAULT_JOURNAL_FIELDS.filter(f => !(hiddenFields || []).includes(f.key));
+
+  const seen = new Set();
+  const out = [];
+  for (const f of source) {
+    if (!f || !f.key || seen.has(f.key)) continue;
+    seen.add(f.key);
+    out.push({
+      key: f.key,
+      label: f.label || f.key,
+      placeholder: f.placeholder || "",
+      rows: f.rows || 3,
+      core: CORE_FIELD_KEYS.includes(f.key),
+    });
+  }
+  for (const c of DEFAULT_JOURNAL_FIELDS) {
+    if (CORE_FIELD_KEYS.includes(c.key) && !seen.has(c.key)) out.push({ ...c, core: true });
+  }
+  return out;
+}
+
+// 空フォーム。項目はユーザー設定で増減するので定義から組み立てる。
+export const emptyForm = (fields = DEFAULT_JOURNAL_FIELDS) => {
+  const form = { sequence: [], sequenceChecks: {} };
+  for (const f of fields) form[f.key] = "";
+  return form;
+};
 export const emptyGoals = () => ({ bigGoal: "", midGoal: "", nearGoal: "" });
 
 // ─── ToDoの期限グループ ───

@@ -1,11 +1,19 @@
 // アプリ全体で共有する定数・デフォルト値。
 
-export const JOURNAL_FIELDS = [
+// ジャーナル項目の初期構成。実際に表示する項目は settings.journalFields（ユーザー編集可）。
+// ここは「初回起動時の既定値」と「コア項目の復元元」としてのみ使う。
+export const DEFAULT_JOURNAL_FIELDS = [
   { key: "grateful",     label: "🙏 今日ありがたいこと", placeholder: "今日感謝していることは？",         rows: 3 },
   { key: "todayGoal",    label: "✅ 今日の目標",        placeholder: "今日やること・達成したいことは？", rows: 3 },
   { key: "tomorrowGoal", label: "🔜 明日の目標",        placeholder: "明日やること・達成したいことは？", rows: 3 },
   { key: "memo",         label: "💬 ひとこと",          placeholder: "その他メモ・気持ち・雑多な情報",   rows: 2 },
 ];
+
+// コア項目：ToDo抽出・スケジュール生成・AI文脈の入力源。削除するとAI機能が壊れるため
+// ラベルの変更と並べ替えのみ許可し、削除は不可とする。
+export const CORE_FIELD_KEYS = ["todayGoal", "tomorrowGoal"];
+
+export const MAX_JOURNAL_FIELDS = 8;
 
 export const BLOCK_COLORS = ["#6c63ff","#38a169","#d97706","#e53e3e","#3182ce","#805ad5","#dd6b20","#2b6cb0","#276749"];
 
@@ -61,7 +69,7 @@ export const DEFAULT_SETTINGS = {
   startDateMode: "today",       // "today" | "last" 起動時の日付
   showDumpMode: true,           // ダンプモードを表示するか
   toastSeconds: 5,              // 保存トーストの表示秒数
-  hiddenFields: [],             // 非表示にするジャーナルフィールドのkey配列
+  journalFields: DEFAULT_JOURNAL_FIELDS,  // 表示するジャーナル項目（順序込み。設定画面で編集可）
   autoExtractOnDump: true,      // ダンプ整理後にToDo自動抽出
   autoExtractOnSave: true,      // 日記保存時にToDo自動抽出
   limitEntriesDays: 730,        // 日記保持日数

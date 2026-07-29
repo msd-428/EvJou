@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useStorage } from "../storage/useStorage.js";
-import { callClaude } from "../api/client.js";
+import { callAI } from "../api/client.js";
 import { extractJson } from "../lib/json.js";
 
 // スケジュールドメイン：ベーススケジュール一覧・選択・AI生成した日次スケジュール。
@@ -31,8 +31,8 @@ export function useSchedule() {
     if (activeBaseId === id) setActiveBaseId(updated[0]?.id || null);
   };
 
-  // 今日のスケジュール生成。selDate/その日のエントリ/目標は App から受け取る。
-  const generateSchedule = async ({ selDate, entry, goals }) => {
+  // 今日のスケジュール生成。selDate/その日のエントリ/目標/ジャーナル項目は App から受け取る。
+  const generateSchedule = async ({ selDate, entry, goals, fields }) => {
     if (!activeBase) { alert("先にベーススケジュールを設定してください"); return; }
     setSchedLoading(true);
     const base = activeBase;
@@ -57,16 +57,14 @@ ${fmt(base.blocks.filter(b => !b.fixed)) || "なし"}
 - 大目標: ${goals.bigGoal || "未設定"}
 - 中目標: ${goals.midGoal || "未設定"}
 - 近目標: ${goals.nearGoal || "未設定"}
-- 今日の目標: ${e.todayGoal || "未記入"}
-- 明日の目標: ${e.tomorrowGoal || "未記入"}
-- ひとこと: ${e.memo || "未記入"}
+${fields.map(f => `- ${f.label}: ${e[f.key] || "未記入"}`).join("\n")}
 
 ## 出力形式
 [{"time":"HH:MM","label":"タスク名","note":"コメント","fixed":true}]`;
 
     try {
-      const raw = await callClaude([{ role: "user", content: prompt }], "", 1500);
-      const parsed = JSON.parse(extractJson(raw));
+      const result = await callAI([{ role: "user", content: prompt }], "", 1500);
+      const parsed = JSON.parse(extractJson(result.text));
       setGeneratedScheds({ ...generatedScheds, [selDate]: parsed });
     } catch (err) {
       alert("スケジュール生成に失敗しました: " + err.message);

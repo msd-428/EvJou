@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { COLORS, JOURNAL_FIELDS, MAIN_TABS } from "../constants.js";
+import { COLORS, MAIN_TABS, MAX_JOURNAL_FIELDS } from "../constants.js";
+import { uid } from "../lib/id.js";
 import { Btn } from "./common.jsx";
 
 export function GeneralSettings({ settings, onSave }) {
@@ -17,6 +18,34 @@ export function GeneralSettings({ settings, onSave }) {
     setSavedFlag(true);
     setTimeout(() => setSavedFlag(false), 2000);
   };
+
+  // ─── ジャーナル項目の編集 ───
+  // key は保存済みエントリとの対応そのものなので、既存項目では絶対に変更しない
+  // （変更すると過去の記録が読めなくなる）。編集できるのは表示名だけ。
+  const setFields = (next) => set("journalFields", next);
+  const editField = (i, k, v) => setFields(draft.journalFields.map((f, n) => n === i ? { ...f, [k]: v } : f));
+  const removeField = (i) => {
+    const f = draft.journalFields[i];
+    if (f.core) return;
+    if (!window.confirm(`「${f.label}」を項目から外しますか？\n過去の記録は消えません。`)) return;
+    setFields(draft.journalFields.filter((_, n) => n !== i));
+  };
+  const moveField = (i, d) => {
+    const j = i + d;
+    if (j < 0 || j >= draft.journalFields.length) return;
+    const next = draft.journalFields.slice();
+    [next[i], next[j]] = [next[j], next[i]];
+    setFields(next);
+  };
+  const addField = () => {
+    if (draft.journalFields.length >= MAX_JOURNAL_FIELDS) return;
+    setFields([...draft.journalFields, { key: "f_" + uid(), label: "新しい項目", placeholder: "", rows: 3 }]);
+  };
+  const iconBtn = (disabled) => ({
+    width: 30, height: 30, flexShrink: 0, padding: 0, fontSize: 13,
+    borderRadius: 6, border: `1px solid ${COLORS.border}`, background: COLORS.white,
+    cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.35 : 1,
+  });
 
   const Toggle = ({ label, k }) => (
     <button onClick={() => set(k, !draft[k])} style={{
@@ -76,27 +105,32 @@ export function GeneralSettings({ settings, onSave }) {
 
       <div style={{ height:1, background:COLORS.border, margin:"6px 0 12px" }} />
 
-      <p style={{ margin:"0 0 8px", fontSize:12, color:COLORS.textSub, fontWeight:700 }}>表示するジャーナル項目</p>
-      {JOURNAL_FIELDS.map(f => {
-        const visible = !draft.hiddenFields.includes(f.key);
-        return (
-          <button key={f.key} onClick={() => set("hiddenFields",
-            visible ? [...draft.hiddenFields, f.key] : draft.hiddenFields.filter(k => k !== f.key))}
-            style={{
-              display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%",
-              padding:"10px 12px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.white,
-              cursor:"pointer", marginBottom:8,
-            }}>
-            <span style={{ fontSize:13, color:COLORS.text }}>{f.label}</span>
-            <span style={{
-              width:42, height:24, borderRadius:12, flexShrink:0, position:"relative", display:"inline-block",
-              background: visible ? COLORS.success : "#ccc",
-            }}>
-              <span style={{ position:"absolute", top:2, left: visible ? 20 : 2, width:20, height:20, borderRadius:"50%", background:"#fff" }} />
-            </span>
-          </button>
-        );
-      })}
+      <p style={{ margin:"0 0 4px", fontSize:12, color:COLORS.textSub, fontWeight:700 }}>ジャーナル項目</p>
+      <p style={{ margin:"0 0 8px", fontSize:11, color:COLORS.textSub, lineHeight:1.6 }}>
+        名前の変更・並べ替え・追加・削除ができます。🔒 の項目はToDo抽出や予定生成に使うため削除できません。<br/>
+        削除しても過去の記録は消えません（項目を戻せば再び表示されます）。
+      </p>
+      {draft.journalFields.map((f, i) => (
+        <div key={f.key} style={{
+          display:"flex", alignItems:"center", gap:6, marginBottom:8,
+          padding:"8px 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.white,
+        }}>
+          <input value={f.label} onChange={e => editField(i, "label", e.target.value)}
+            style={{ flex:1, minWidth:0, padding:"7px 9px", borderRadius:6, border:`1px solid ${COLORS.border}`, fontSize:13 }} />
+          <button onClick={() => moveField(i, -1)} disabled={i === 0}
+            style={iconBtn(i === 0)}>↑</button>
+          <button onClick={() => moveField(i, 1)} disabled={i === draft.journalFields.length - 1}
+            style={iconBtn(i === draft.journalFields.length - 1)}>↓</button>
+          {f.core
+            ? <span style={{ width:30, textAlign:"center", fontSize:13 }} title="削除できません">🔒</span>
+            : <button onClick={() => removeField(i)} style={{ ...iconBtn(false), color:COLORS.danger }}>🗑</button>}
+        </div>
+      ))}
+      <Btn variant="outline" onClick={addField}
+        disabled={draft.journalFields.length >= MAX_JOURNAL_FIELDS}
+        style={{ width:"100%", marginBottom:12, padding:"9px" }}>
+        ＋ 項目を追加（{draft.journalFields.length}/{MAX_JOURNAL_FIELDS}）
+      </Btn>
 
       <div style={{ height:1, background:COLORS.border, margin:"6px 0 12px" }} />
 
@@ -125,7 +159,7 @@ export function GeneralSettings({ settings, onSave }) {
   );
 }
 
-export function AiSettings({ cfg, onSave }) {
+export function AiSettings({ cfg, onSave, aiRemaining }) {
   const [draft, setDraft] = useState(cfg);
   const [savedFlag, setSavedFlag] = useState(false);
   useEffect(() => { setDraft(cfg); }, [cfg]);
@@ -139,7 +173,7 @@ export function AiSettings({ cfg, onSave }) {
 
   const modeBtn = (mode, label) => (
     <button onClick={() => set("mode", mode)} style={{
-      flex:1, padding:"10px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700,
+      flex:1, padding:"10px 4px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:700,
       border: draft.mode === mode ? `2px solid ${COLORS.primary}` : `1px solid ${COLORS.border}`,
       background: draft.mode === mode ? COLORS.primaryBg : COLORS.white,
       color: draft.mode === mode ? COLORS.primary : COLORS.textSub,
@@ -166,9 +200,10 @@ export function AiSettings({ cfg, onSave }) {
 
   return (
     <div style={{ background:COLORS.bg, borderRadius:12, padding:"14px 16px", marginBottom:24 }}>
-      <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+      <div style={{ display:"flex", gap:6, marginBottom:12 }}>
+        {modeBtn("proxy", "🤖 EvJou AI")}
         {modeBtn("local", "🖥 ローカル")}
-        {modeBtn("cloud", "🔑 BYOK")}
+        {modeBtn("cloud", "🔑 APIキー")}
       </div>
 
       <label style={{ display:"block", fontSize:12, color:COLORS.textSub, fontWeight:600, marginBottom:4 }}>チャットの人格</label>
@@ -181,7 +216,24 @@ export function AiSettings({ cfg, onSave }) {
         AIチャットの口調のみ変わります（傾向・目標の分析はフラットなまま）。
       </p>
 
-      {draft.mode === "local" ? (
+      {draft.mode === "proxy" && (
+        <>
+          <p style={{ margin:"0 0 6px", fontSize:12, color:COLORS.text, lineHeight:1.7 }}>
+            開発者のAIサーバーを利用します。設定は不要です。<br/>
+            <span style={{ color: COLORS.primary, fontWeight: 600 }}>※ローカルLLMのため、利用回数の制限はありません。</span>
+          </p>
+          {aiRemaining != null && (
+            <p style={{ margin:"0 0 6px", fontSize:12, color:COLORS.primary, fontWeight:700 }}>
+              本日のAI利用回数: {aiRemaining} 回
+            </p>
+          )}
+          <p style={{ margin:"0 0 6px", fontSize:11, color:COLORS.textSub, lineHeight:1.6 }}>
+            利用時に日記の内容がサーバーに送信されます。サーバー上にデータは保存されません。
+          </p>
+        </>
+      )}
+
+      {draft.mode === "local" && (
         <>
           {field("エンドポイント (OpenAI互換)", "localEndpoint", "http://localhost:11434/v1")}
           {field("モデル名", "localModel", "qwen2.5")}
@@ -197,7 +249,9 @@ export function AiSettings({ cfg, onSave }) {
             Ollama / LM Studio / llama.cpp 等。アプリと別オリジンの場合はサーバ側でCORS許可が必要です。
           </p>
         </>
-      ) : (
+      )}
+
+      {draft.mode === "cloud" && (
         <>
           {field("APIキー", "apiKey", "sk-ant-...", "password")}
           {field("モデル名", "cloudModel", "claude-sonnet-5")}

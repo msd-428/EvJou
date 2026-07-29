@@ -1,0 +1,16 @@
+{
+  "name": "evjou-proxy",
+  "version": "1.0.0",
+  "description": "EvJou AI Firestore Worker Node",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "firebase-admin": "^14.2.0",
+    "node-fetch": "^3.3.2",
+    "p-queue": "^9.3.3"
+  }
+}

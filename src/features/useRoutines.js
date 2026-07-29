@@ -26,6 +26,21 @@ export function useRoutines(settings) {
     setRoutineInput("");
   };
 
+  // AI提案の承認など、まとめて導入中ルーチンへ追加する。
+  // 1件ずつ呼ぶと setState 未反映の古い routines を基点にして前の追加が消えるため、
+  // 必ず配列で受けて 1回の更新にまとめる。戻り値は追加できなかった件数（上限超過・重複）。
+  const addRoutinesDirect = (texts) => {
+    const list = routines.active;
+    const added = [];
+    for (const text of texts) {
+      if (list.length + added.length >= settings.limitRoutinePerTab) break;
+      if (list.some(r => r.text === text) || added.some(r => r.text === text)) continue;
+      added.push({ id: uid(), text, schedule: { type: "daily" } });
+    }
+    if (added.length > 0) saveRoutines({ ...routines, active: [...list, ...added] });
+    return texts.length - added.length;
+  };
+
   const removeRoutine = (tabName, id) => {
     saveRoutines({ ...routines, [tabName]: routines[tabName].filter(r => r.id !== id) });
     // 導入中ルーチンを消すときは、チェック履歴に残る孤児idも掃除する
@@ -73,6 +88,6 @@ export function useRoutines(settings) {
   return {
     routines, setRoutines, routineChecks, setRoutineChecks,
     routineInput, setRoutineInput, routineSubTab, setRoutineSubTab,
-    saveRoutines, addRoutine, removeRoutine, moveRoutine, updateRoutineSchedule, toggleRoutineCheck,
+    saveRoutines, addRoutine, addRoutinesDirect, removeRoutine, moveRoutine, updateRoutineSchedule, toggleRoutineCheck,
   };
 }

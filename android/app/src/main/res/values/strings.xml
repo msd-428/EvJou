@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">EvJou</string>
+    <string name="title_activity_main">EvJou</string>
+    <string name="package_name">com.masuda.evjou</string>
+    <string name="custom_url_scheme">com.masuda.evjou</string>
+</resources>

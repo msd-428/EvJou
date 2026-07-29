@@ -1,10 +1,10 @@
 // AI通信クライアント。3モード分岐: proxy（EvJou AI） / local（ローカルLLM） / cloud（BYOK）。
 //
 // ver 1.1: callClaude → callAI に改名。callProxy 追加（Firebase匿名認証 + プロキシ経由）。
-// 戻り値を { text, remaining? } オブジェクトに統一。
+// 戻り値を { text, usageCount?, dailyLimit? } オブジェクトに統一。
 
 import { ensureAuth, getDb } from "../lib/firebase.js";
-import { collection, addDoc, onSnapshot, serverTimestamp, doc } from "firebase/firestore";
+import { collection, addDoc, onSnapshot, serverTimestamp, updateDoc, doc } from "firebase/firestore";
 
 // AIチャットの人格（チャットのみに適用。分析系はフラットに保つ）
 export const PERSONAS = {
@@ -47,6 +47,16 @@ function aiError(message, type = "generic") {
 }
 
 // ── proxy: EvJou AI（Firestore経由のバケツリレー） ──
+//
+// 締切は「経過時間」ではなく「進捗が途絶えた時間」で測る。
+// ワーカーは受理直後に status を pending → queued へ書き換え、以後もジョブが1件片づくたびに
+// queuePosition を更新するので、生きている限り文書は必ず動く。
+// よって「pending のまま無応答＝ワーカー不在」が確定でき、
+// 単純に制限時間を延ばした場合の副作用（PC停止時に長時間待たされる）を避けられる。
+const PROXY_ACK_MS = 60000;       // 受理されない＝ワーカー不在とみなす
+const PROXY_PROGRESS_MS = 180000; // 受理後、文書の更新が途絶えたとみなす
+const PROXY_MAX_MS = 600000;      // 何があっても待ち続けない絶対上限
+
 async function callProxy(messages, system, maxTokens, onStatusChange) {
   const user = await ensureAuth();
   const db = getDb();
@@ -67,34 +77,69 @@ async function callProxy(messages, system, maxTokens, onStatusChange) {
   }
 
   return new Promise((resolve, reject) => {
-    // タイムアウト設定（2分）: ワーカー(PC)が起動していない場合などのフェイルセーフ
-    const timeout = setTimeout(() => {
-      unsubscribe();
-      reject(aiError("AIサーバーからの応答がタイムアウトしました。自宅PCが起動しているか確認してください。", "server_down"));
-    }, 120000);
+    const startedAt = Date.now();
+    let acked = false;   // ワーカーが受理を書き戻したか
+    let settled = false;
+    let timer = null;
+    let unsubscribe = null;
 
-    const unsubscribe = onSnapshot(doc(db, "ai_requests", reqRef.id), (snap) => {
+    const stop = () => { settled = true; clearTimeout(timer); unsubscribe?.(); };
+
+    const finish = (err, value) => {
+      if (settled) return;
+      stop();
+      if (err) reject(err); else resolve(value);
+    };
+
+    // 打ち切り時は文書に cancelled を書く。放置すると順番が来た時に
+    // 誰も待っていない結果のためにGPUを回すことになり、渋滞を悪化させる。
+    const abandon = () => {
+      if (settled) return;
+      stop();
+      // 失敗しても待機の打ち切り自体は成立するので握り潰す（ワーカーが無駄に1件処理するだけ）。
+      // ただし原因はほぼ Firestore ルールの update 不許可なので、切り分けのために警告は残す。
+      updateDoc(doc(db, "ai_requests", reqRef.id), {
+        status: "cancelled",
+        processedAt: serverTimestamp(),
+      }).catch((e) => console.warn("[EvJou] リクエストのキャンセル書き込みに失敗:", e?.code || e));
+      reject(aiError(
+        acked
+          ? "AIサーバーの応答が途絶えました。時間をおいて試してください。"
+          : "AIサーバーが応答しません。自宅PCが起動しているか確認してください。",
+        "server_down"
+      ));
+    };
+
+    const arm = (ms) => {
+      clearTimeout(timer);
+      const left = PROXY_MAX_MS - (Date.now() - startedAt);
+      timer = setTimeout(abandon, Math.max(0, Math.min(ms, left)));
+    };
+    arm(PROXY_ACK_MS);
+
+    unsubscribe = onSnapshot(doc(db, "ai_requests", reqRef.id), (snap) => {
       if (!snap.exists()) return;
       const data = snap.data();
-      
-      if (data.status === "pending" || data.status === "processing" || data.status === "waiting_for_server") {
-        onStatusChange?.(data.status);
-      } else if (data.status === "completed") {
-        clearTimeout(timeout);
-        unsubscribe();
-        resolve({
+
+      if (data.status === "completed") {
+        finish(null, {
           text: data.response || "",
-          remaining: data.remaining != null ? data.remaining : null,
+          usageCount: data.usageCount != null ? data.usageCount : null,
+          dailyLimit: data.dailyLimit != null ? data.dailyLimit : null,
         });
       } else if (data.status === "error") {
-        clearTimeout(timeout);
-        unsubscribe();
-        reject(aiError(data.error || "AIサーバーエラーが発生しました。", data.errorType || "generic"));
+        finish(aiError(data.error || "AIサーバーエラーが発生しました。", data.errorType || "generic"));
+      } else if (data.status !== "cancelled") {
+        // pending / queued / processing / waiting_for_server
+        // pending のうちは受理待ちなので締切を延ばさない（延ばすとワーカー不在を検知できない）
+        if (data.status !== "pending") {
+          acked = true;
+          arm(PROXY_PROGRESS_MS);
+        }
+        onStatusChange?.(data.status, data.queuePosition || 0);
       }
-    }, (error) => {
-      clearTimeout(timeout);
-      unsubscribe();
-      reject(aiError("データベースの監視に失敗しました。", "network"));
+    }, () => {
+      finish(aiError("データベースの監視に失敗しました。", "network"));
     });
   });
 }
@@ -136,7 +181,8 @@ async function callCloud(messages, system, maxTokens) {
 }
 
 // ── 統一エントリポイント ──
-// 戻り値: { text: string, remaining?: number }
+// 戻り値: { text: string, usageCount?: number, dailyLimit?: number }
+// onStatusChange(status, queuePosition) は proxy モードのみ呼ばれる。
 export async function callAI(messages, system, maxTokens = 1200, onStatusChange = null) {
   if (aiConfig.mode === "proxy") return callProxy(messages, system, maxTokens, onStatusChange);
   const text = aiConfig.mode === "local"

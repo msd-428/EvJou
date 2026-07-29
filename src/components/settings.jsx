@@ -159,7 +159,7 @@ export function GeneralSettings({ settings, onSave }) {
   );
 }
 
-export function AiSettings({ cfg, onSave, aiRemaining }) {
+export function AiSettings({ cfg, onSave, aiUsage }) {
   const [draft, setDraft] = useState(cfg);
   const [savedFlag, setSavedFlag] = useState(false);
   useEffect(() => { setDraft(cfg); }, [cfg]);
@@ -220,11 +220,11 @@ export function AiSettings({ cfg, onSave, aiRemaining }) {
         <>
           <p style={{ margin:"0 0 6px", fontSize:12, color:COLORS.text, lineHeight:1.7 }}>
             開発者のAIサーバーを利用します。設定は不要です。<br/>
-            <span style={{ color: COLORS.primary, fontWeight: 600 }}>※ローカルLLMのため、利用回数の制限はありません。</span>
+            <span style={{ color: COLORS.primary, fontWeight: 600 }}>※ローカルLLMのため、通常の使い方で上限に届くことはありません。</span>
           </p>
-          {aiRemaining != null && (
+          {aiUsage && (
             <p style={{ margin:"0 0 6px", fontSize:12, color:COLORS.primary, fontWeight:700 }}>
-              本日のAI利用回数: {aiRemaining} 回
+              本日のAI利用回数: {aiUsage.count} 回{aiUsage.limit ? ` / ${aiUsage.limit}` : ""}
             </p>
           )}
           <p style={{ margin:"0 0 6px", fontSize:11, color:COLORS.textSub, lineHeight:1.6 }}>

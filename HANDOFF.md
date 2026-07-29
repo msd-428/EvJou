@@ -422,3 +422,93 @@ BYOK方式から**「EvJou AI（開発者のローカルLLMプロキシ）」を
 ### 次のステップ
 - ローカル環境および実機（OPPO Reno A などの古いデバイスを含む）で、すべてのプロキシキューイングの挙動やAI利用回数の表示などを再確認する。
 - 問題がなければ、Playストア配布に向けた最終のビルド・調整へと進む。
+
+---
+
+## 14. Proxy Worker Queueing System — 穴塞ぎ完了記録（2026-07-29 / Claude Code）
+
+バックログ最後の1件。キューは作り直さず、**既存実装の穴だけ**を塞いだ。
+
+### 中核の設計変更：締切を「経過時間」から「無音時間」に変えた
+元の `callProxy` は 120秒の固定タイムアウト。直列処理なので数件詰まるだけで超え、
+かつ滞留中は文書が一切更新されないため、**「PCが落ちている」と「順番待ち」を区別できなかった**。
+
+そこで**ワーカーが受理を即座に書き戻す**契約を足した：
+- 検知した瞬間に `pending` → `queued` ＋ `queuePosition` を書く。
+- ジョブが1件片づくたび、待機中の全文書の `queuePosition` を書き直す（＝生存ハートビート）。
+- リトライ中も `waiting_for_server` ＋ `attempt` を毎回書く。
+
+これでクライアントは**時間ではなく無音を測れる**：
+| 状況 | 締切 | 出るメッセージ |
+|---|---|---|
+| `pending` のまま受理されない | 60秒 | AIサーバーが応答しません（＝PC不在。**旧実装より速く検知**） |
+| 受理後、文書の更新が途絶えた | 180秒 | 応答が途絶えました |
+| 何があっても | 600秒 | 同上 |
+
+**単純にタイムアウトを延ばす案は採らなかった。**一番頻度の高い失敗（PCが落ちている）で
+10分待たされることになり、悪化するため。この設計を単一の固定タイムアウトに戻さないこと。
+
+### その他に塞いだ穴
+1. **孤児復帰** … 起動時に `queued`/`processing`/`waiting_for_server` を `pending` へ戻す。
+   **リスナー登録より前**に実行（後だとリスナーが同じ文書を二重投入する）。
+2. **UTC日付バグ** … `toLocalDateStr()` をワーカー内に実装（`src/lib/date.js` と同一仕様）。
+   `toISOString()` も **JST決め打ちのオフセット加算も使わない**（後者は別TZで動かすと壊れる）。
+3. **上限の実効化** … 200回/日（`DAILY_LIMIT` で可変）。超過時は例外に `errorType='rate_limit'` を
+   持たせる。メッセージ文字列 `"無料利用枠"` との照合は文言変更で壊れるので廃止。
+4. **`remaining` の名前と実態の不一致** … `usageCount` ＋ `dailyLimit` に改名。
+   表示は「本日のAI利用回数: 12 回 / 200」。
+5. **掃除** … 30分ごとに `processedAt` が KEEP_HOURS(既定24h) より古い文書を削除。
+   終端ステータスの文書だけが `processedAt` を持つので、この1条件で未処理を巻き込まない
+   （複合インデックス不要）。
+6. **Ollama のハング対策** … `AbortSignal.timeout`（既定120秒）。無しだとキュー全体が永久に止まる。
+7. **キャンセル** … クライアントが打ち切る際に文書へ `cancelled` を書き、ワーカーは順番が
+   来た時にスキップする。→ **ただし現状ルールで不許可。下記参照。**
+8. **二重処理の防止** … `pending → queued` をトランザクション化（`claimRequest`）。下記参照。
+
+### ⚠️ 未完了：Firestore ルールの変更が必要（コンソール作業）
+上記7のキャンセル書き込みは実機で **`permission-denied`** になることを確認済み。
+現ルールはクライアントの `update` を許可していない。以下を追加すれば有効になる：
+
+```
+match /ai_requests/{id} {
+  allow create: if request.auth.uid == request.resource.data.uid;
+  allow read:   if request.auth.uid == resource.data.uid;
+  // 打ち切り時の自己キャンセルのみ許可（他フィールドは書かせない）
+  allow update: if request.auth.uid == resource.data.uid
+                && request.resource.data.status == 'cancelled'
+                && request.resource.data.diff(resource.data).affectedKeys()
+                     .hasOnly(['status', 'processedAt']);
+}
+```
+未適用でも動作は成立する（諦めた1件をワーカーが無駄に処理するだけ）。
+失敗時は `console.warn` を出すので切り分け可能。
+
+### ⚠️ 未解決：正体不明の2つ目のワーカーが同じコレクションを消費している
+検証中に発覚。全リクエストが**2回処理され、利用回数が2ずつ増えていた**。
+文書に旧コードの `remaining` と新コードの `usageCount` が**両方**書かれており、
+`users/{uid}` に旧コード固有の `plan:"free"` が付いていたことから確定。
+この開発PCには該当プロセスが無い（`node index.js` は1つ、Docker未インストール、WSL未導入）ため、
+**別のマシンで旧コードのワーカーが常駐している**と考えられる。心当たりを止めること。
+
+対策として `claimRequest()`（`pending → queued` をトランザクションで取得）を入れたので、
+二重に居ても**先に取った方だけが処理する**。ただし旧コードのワーカーが勝った場合は
+旧仕様（UTC日付・上限50・キュー4件目以降を拒否）で処理されるので、放置は不可。
+
+### 検証（実通信・すべて実施）
+- 3件同時投入 … 直列処理／待ち順の詰め直し／`usageCount` が1ずつ増加 ✅
+- キャンセル … 処理前に `cancelled` にした文書はスキップされ推論されない ✅
+- 孤児復帰 … `processing`/`queued`/`waiting_for_server` の3種すべて起動時に復帰・完走 ✅
+- Ollama停止 … `waiting_for_server` を毎回書きつつ5回リトライ→`server_down` ✅
+- ブラウザ実機（`npm run dev` → 🤖AI）… 往復成功、「本日のAI利用回数: 1 回 / 200」表示 ✅
+- ワーカー停止時 … 60秒で打ち切り「AIサーバーがメンテナンス中です」表示 ✅
+  （文書のキャンセル書き込みのみ `permission-denied`。上記ルール未適用のため）
+- `npm run build` ✅ / `test:dataloss` は保存経路に触れていないため対象外
+
+### 変更ファイル
+- `proxy/index.js`（全面整理）／`src/api/client.js`（`callProxy` の締切設計）
+- `src/daily-journal.jsx`（待機文言・利用回数state）／`src/components/settings.jsx`（表示）
+- `src/components/common.jsx`（`AIResult` に `loadingText` を追加）
+
+### 次のセッションへ
+バックログは空。優先順位は (1) 上記2件（ルール適用・迷子ワーカーの停止）、
+(2) Capacitor 実機での動作確認、(3) Play ストア配布の実務（§11 のチェックリスト）。

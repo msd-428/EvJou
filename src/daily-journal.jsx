@@ -28,6 +28,14 @@ import { TodoListGrouped } from "./components/todo.jsx";
 import { RoutineCheckView, RoutineStats, RoutineScheduleEditor } from "./components/routine.jsx";
 import { GeneralSettings, AiSettings } from "./components/settings.jsx";
 
+// AI待機中の表示文言。ワーカーが待ち順を書き戻すので、待たされている理由を具体的に出せる。
+function aiLoadingMessage(status, queuePos, base = "AIが考え中...") {
+  if (status === "waiting_for_server") return "AIサーバーの起動を待っています...";
+  if (status === "queued") return queuePos > 1 ? `順番待ち中... (あと${queuePos - 1}件)` : "まもなく開始します...";
+  if (status === "pending") return "AIサーバーに接続中...";
+  return base;
+}
+
 // ═══════════════ メインApp（オーケストレータ） ═══════════════
 
 export default function App() {
@@ -46,8 +54,9 @@ export default function App() {
   const [trendLoading, setTrendLoading] = useState(false);
   const [goalsText, setGoalsText] = useState("");
   const [goalsLoading, setGoalsLoading] = useState(false);
-  const [aiRemaining, setAiRemaining] = useState(null);
+  const [aiUsage, setAiUsage] = useState(null);   // { count, limit }
   const [aiLoadingStatus, setAiLoadingStatus] = useState("idle");
+  const [aiQueuePos, setAiQueuePos] = useState(0);
   const chatEndRef = useRef(null);
 
   const [importError, setImportError] = useState("");
@@ -124,10 +133,14 @@ export default function App() {
     return false;
   };
 
-  // AI呼び出し結果から残り回数を更新
+  // AI呼び出し結果から本日の利用回数を更新
   const updateRemaining = (result) => {
-    if (result?.remaining != null) setAiRemaining(result.remaining);
+    if (result?.usageCount != null) setAiUsage({ count: result.usageCount, limit: result.dailyLimit });
   };
+
+  // AI待機状態の更新（proxyモードのみ通知が来る）
+  const onAiStatus = (status, pos = 0) => { setAiLoadingStatus(status); setAiQueuePos(pos); };
+  const resetAiStatus = () => { setAiLoadingStatus("idle"); setAiQueuePos(0); };
 
   // AIエラーのメッセージ生成
   const aiErrorMessage = (err) => {
@@ -173,7 +186,7 @@ ${openTodos}
         [{ role: "user", content: "今日のエントリをまとめてコメントしてください。" }],
         buildChatSystem(date),
         1200,
-        (status) => setAiLoadingStatus(status)
+        onAiStatus
       );
       updateRemaining(result);
       setChatMsgs([{ role: "assistant", content: result.text }]);
@@ -181,7 +194,7 @@ ${openTodos}
       setChatMsgs([{ role: "assistant", content: aiErrorMessage(err) }]);
     }
     setChatLoading(false);
-    setAiLoadingStatus("idle");
+    resetAiStatus();
   };
 
   const sendChat = async () => {
@@ -190,14 +203,14 @@ ${openTodos}
     const next = [...chatMsgs, { role: "user", content: chatInput.trim() }];
     setChatMsgs(next); setChatInput(""); setChatLoading(true);
     try {
-      const result = await callAI(next, buildChatSystem(selDate), 1200, (status) => setAiLoadingStatus(status));
+      const result = await callAI(next, buildChatSystem(selDate), 1200, onAiStatus);
       updateRemaining(result);
       setChatMsgs([...next, { role: "assistant", content: result.text }]);
     } catch (err) {
       setChatMsgs([...next, { role: "assistant", content: aiErrorMessage(err) }]);
     }
     setChatLoading(false);
-    setAiLoadingStatus("idle");
+    resetAiStatus();
   };
 
   const runTrend = async () => {
@@ -209,12 +222,12 @@ ${openTodos}
       return `=== ${fmtDate(d)} ===\n${body}`;
     }).join("\n\n");
     try {
-      const result = await callAI([{ role: "user", content: "以下の直近の日記を分析し、傾向・成長・アドバイスをください。\n\n" + recent }], null, 1200, (status) => setAiLoadingStatus(status));
+      const result = await callAI([{ role: "user", content: "以下の直近の日記を分析し、傾向・成長・アドバイスをください。\n\n" + recent }], null, 1200, onAiStatus);
       updateRemaining(result);
       setTrendText(result.text);
     } catch (err) { setTrendText(aiErrorMessage(err)); }
     setTrendLoading(false);
-    setAiLoadingStatus("idle");
+    resetAiStatus();
   };
 
   const runGoals = async () => {
@@ -253,13 +266,13 @@ ${routineSummary}
 2. 目標との乖離や注意すべきパターン
 3. 目標達成のための具体的な次のアクション提案`;
     try {
-      const result = await callAI([{ role: "user", content: prompt }], null, 1200, (status) => setAiLoadingStatus(status));
+      const result = await callAI([{ role: "user", content: prompt }], null, 1200, onAiStatus);
       updateRemaining(result);
       setGoalsText(result.text);
     }
     catch (err) { setGoalsText(aiErrorMessage(err)); }
     setGoalsLoading(false);
-    setAiLoadingStatus("idle");
+    resetAiStatus();
   };
 
   // ─── 設定 ───
@@ -386,7 +399,7 @@ ${routineSummary}
       {showSettings && (
         <BottomSheet title="⚙️ アプリ設定" onClose={() => { setShowSettings(false); setImportError(""); setImportSuccess(false); }}>
           <p style={{ margin:"0 0 12px", fontWeight:700, fontSize:13, color:"#aaa", letterSpacing:1 }}>AI接続</p>
-          <AiSettings cfg={aiCfg} onSave={saveAiCfg} aiRemaining={aiRemaining} />
+          <AiSettings cfg={aiCfg} onSave={saveAiCfg} aiUsage={aiUsage} />
 
           <p style={{ margin:"0 0 12px", fontWeight:700, fontSize:13, color:"#aaa", letterSpacing:1 }}>表示・動作</p>
           <GeneralSettings settings={settings} onSave={saveSettings} />
@@ -747,11 +760,7 @@ ${routineSummary}
                 {chatLoading && (
                   <div style={{ display:"flex", justifyContent:"flex-start", marginBottom:12 }}>
                     <div style={{ padding:"10px 16px", borderRadius:"18px 18px 18px 4px", background:"#f0eeff", color:"#888", fontSize:14 }}>
-                      {aiLoadingStatus === "waiting_for_server"
-                        ? "AIサーバーの応答を待っています..."
-                        : aiLoadingStatus === "pending"
-                          ? "順番待ち中..."
-                          : "AIが考え中..."}
+                      {aiLoadingMessage(aiLoadingStatus, aiQueuePos)}
                     </div>
                   </div>
                 )}
@@ -767,8 +776,8 @@ ${routineSummary}
             </div>
           )}
 
-          {aiSubTab === "trend" && <AIResult loading={trendLoading} text={trendText} placeholder="直近7日を分析します" />}
-          {aiSubTab === "goals" && <AIResult loading={goalsLoading} text={goalsText} placeholder="目標と行動のギャップを分析します" />}
+          {aiSubTab === "trend" && <AIResult loading={trendLoading} text={trendText} placeholder="直近7日を分析します" loadingText={aiLoadingMessage(aiLoadingStatus, aiQueuePos, "分析中...")} />}
+          {aiSubTab === "goals" && <AIResult loading={goalsLoading} text={goalsText} placeholder="目標と行動のギャップを分析します" loadingText={aiLoadingMessage(aiLoadingStatus, aiQueuePos, "分析中...")} />}
 
           {aiSubTab === "history" && (
             <div>

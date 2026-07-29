@@ -35,7 +35,22 @@ All agents working on this workspace must adhere to these rules and understand t
   - `todayGoal` / `tomorrowGoal` are **core fields** (`CORE_FIELD_KEYS`): renameable and reorderable but not removable, because ToDo extraction, schedule generation and AI chat context read them by key.
   - Removing a field never deletes stored entry data — restoring the field brings past records back into view.
   - The legacy `settings.hiddenFields` shape is migrated automatically in `normalizeJournalFields()`.
-- **Proxy Worker Queueing System** — ⚠️ **the queue already exists; do NOT rewrite it from scratch.**
+- **[Completed] Proxy Worker Queueing System** — gaps closed 2026-07-29. See `HANDOFF.md` §14.
+  Contract in one line: the worker **acknowledges** a request (`pending` → `queued` + `queuePosition`)
+  the moment it sees it, and re-writes `queuePosition` every time a job drains, so a live worker
+  always keeps the document moving. The client therefore measures **silence, not elapsed time**:
+  60s with no acknowledgement = worker down; 180s with no document update after acknowledgement =
+  stalled; 600s absolute cap. Do not "simplify" this back into a single fixed timeout — that is the
+  bug this replaced.
+  - ⚠️ **Requires a Firestore rules change that is not yet applied** — see `HANDOFF.md` §14.
+  - ⚠️ **A second worker running old code was observed consuming the same collection** from a machine
+    outside this repo. `claimRequest()` now makes double-processing harmless, but the stray worker
+    still needs to be found and stopped.
+
+<details>
+<summary>元の課題メモ（対応済み・記録として残す）</summary>
+
+  ⚠️ **the queue already exists; do NOT rewrite it from scratch.**
   `proxy/index.js` already uses `p-queue` (`concurrency: 1`, serial execution to avoid GPU OOM),
   marks `status: 'processing'` when a slot frees, and retries Ollama up to 5 times with a
   `waiting_for_server` status between attempts. The remaining work is **closing the gaps**, notably:
@@ -51,3 +66,5 @@ All agents working on this workspace must adhere to these rules and understand t
     the `"無料利用枠"` branch in the error handler is dead code. `remaining` is a count-up, not a
     remaining count, despite the field name.
   - **`ai_requests` is never cleaned up** — completed documents accumulate indefinitely.
+
+</details>

@@ -171,10 +171,10 @@ export function Banner({ type, children }) {
   );
 }
 
-export function AIResult({ loading, text, placeholder }) {
+export function AIResult({ loading, text, placeholder, loadingText }) {
   return (
     <div style={{ background:"#fff", borderRadius:12, padding:20, minHeight:200, boxShadow:"0 1px 4px rgba(0,0,0,.08)" }}>
-      {loading ? <p style={{ color:"#888", textAlign:"center", paddingTop:40 }}>分析中...</p>
+      {loading ? <p style={{ color:"#888", textAlign:"center", paddingTop:40 }}>{loadingText || "分析中..."}</p>
         : text ? <div style={{ fontSize:14, lineHeight:1.8, color:"#333", whiteSpace:"pre-wrap" }}>{text}</div>
         : <p style={{ color:"#bbb", textAlign:"center", paddingTop:40, fontSize:14 }}>{placeholder}</p>}
     </div>

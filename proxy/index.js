@@ -34,8 +34,11 @@ const queue = new PQueue({ concurrency: 1 });
 // 3. レートリミット管理関数
 // ==========================================
 async function checkAndIncrementUsage(uid) {
-  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  // JST日付を取得 (YYYY-MM-DD)
+  const jstDate = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const today = jstDate.toISOString().split('T')[0];
   const userRef = db.collection('users').doc(uid);
+  const limit = 50; // 1日の上限
   
   return await db.runTransaction(async (transaction) => {
     const doc = await transaction.get(userRef);
@@ -47,14 +50,50 @@ async function checkAndIncrementUsage(uid) {
     }
 
     const newCount = data.usageCount + 1;
+    if (newCount > limit) {
+      throw new Error(`無料利用枠の上限（1日${limit}回）に達しました。`);
+    }
+
     transaction.set(userRef, { ...data, usageCount: newCount }, { merge: true });
     
-    return newCount;
+    return limit - newCount;
   });
 }
 
 // ==========================================
-// 4. Firestore 監視 (ワーカーロジック)
+// 4. 起動時のクリーンアップ・孤児リクエスト救済
+// ==========================================
+async function rescueOrphanedRequests() {
+  const orphaned = await db.collection('ai_requests').where('status', 'in', ['processing', 'waiting_for_server']).get();
+  if (!orphaned.empty) {
+    const batch = db.batch();
+    orphaned.forEach(doc => {
+      console.log(`♻️ 孤児リクエストを救済: ${doc.id}`);
+      batch.update(doc.ref, { status: 'pending' });
+    });
+    await batch.commit();
+  }
+}
+
+async function cleanupOldRequests() {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const oldDocs = await db.collection('ai_requests')
+    .where('status', 'in', ['completed', 'error'])
+    .where('createdAt', '<', oneHourAgo)
+    .get();
+  if (!oldDocs.empty) {
+    const batch = db.batch();
+    oldDocs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    console.log(`🧹 古いリクエスト ${oldDocs.size}件を削除しました`);
+  }
+}
+
+await rescueOrphanedRequests();
+await cleanupOldRequests();
+
+// ==========================================
+// 5. Firestore 監視 (ワーカーロジック)
 // ==========================================
 console.log('👀 Firestore `ai_requests` コレクションの監視を開始します...');
 
@@ -67,6 +106,18 @@ db.collection('ai_requests')
         const doc = change.doc;
         const reqData = doc.data();
         
+        // キューの滞留をチェックして直ちにリジェクト
+        if (queue.size + queue.pending > 3) {
+          console.log(`⚠️ キュー満杯のため拒否: ReqID=${doc.id}`);
+          doc.ref.update({
+            status: 'error',
+            error: '現在サーバーが混み合っています。少し待ってから再度お試しください。',
+            errorType: 'rate_limit',
+            processedAt: FieldValue.serverTimestamp()
+          }).catch(console.error);
+          return;
+        }
+
         // キューに追加
         queue.add(async () => {
           console.log(`[${new Date().toISOString()}] 処理開始: ReqID=${doc.id}, User=${reqData.uid}`);

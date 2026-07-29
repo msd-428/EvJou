@@ -4,3 +4,6 @@ dist-ssr
 *.local
 .DS_Store
 .vite
+
+# Firebase サービスアカウント秘密鍵。絶対にコミットしない。
+proxy/serviceAccountKey.json

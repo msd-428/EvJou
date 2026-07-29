@@ -1,33 +1,64 @@
 import { Checkbox } from "./common.jsx";
+import { fmtShort } from "../lib/date.js";
 
-export function SequenceChecklist({ sequence, checks, onToggle }) {
-  if (!sequence || sequence.length === 0) return null;
-  const doneCount = sequence.filter((_, i) => checks && checks[i]).length;
+// 今日の稼働シーケンス。独自データは持たず ToDo をそのまま映すビュー。
+// チェックすると実体の ToDo が done になる（onToggle は ToDo の id を受け取る）。
+function SequenceRow({ todo, onToggle, carried }) {
+  const checked = !!todo.done;
+  return (
+    <div onClick={() => onToggle(todo.id)} style={{
+      display:"flex", alignItems:"center", gap:10,
+      background: checked ? "rgba(56,161,105,.1)" : "rgba(255,255,255,.6)",
+      borderRadius:8, padding:"8px 10px", cursor:"pointer",
+    }}>
+      <Checkbox checked={checked} onClick={() => onToggle(todo.id)} />
+      <span style={{
+        fontSize:13, lineHeight:1.5, flex:1, wordBreak:"break-word",
+        color: checked ? "#276749" : (carried ? "#9b2c2c" : "#78350f"),
+        textDecoration: checked ? "line-through" : "none",
+      }}>{todo.text}</span>
+      {carried && !checked && (
+        <span style={{ flexShrink:0, background:"#fff0f0", color:"#e53e3e", borderRadius:8, padding:"1px 7px", fontSize:10, fontWeight:700 }}>
+          {fmtShort(todo.dueDate)}
+        </span>
+      )}
+    </div>
+  );
+}
+
+export function TodaySequence({ sequence, onToggle }) {
+  const { carried, today, total, doneCount } = sequence;
+
+  if (total === 0) {
+    return (
+      <p style={{ margin:0, fontSize:12, color:"#b45309", lineHeight:1.7 }}>
+        今日の稼働はまだありません。ダンプモードで思考を吐き出すか、ToDoに期限「今日」を付けるとここに並びます。
+      </p>
+    );
+  }
 
   return (
-    <div style={{ marginTop:16, background:"#fff7e6", border:"1px solid #fcd34d", borderRadius:12, padding:"14px 16px" }}>
-      <p style={{ margin:"0 0 10px", fontSize:13, fontWeight:700, color:"#92400e" }}>🎯 今日の稼働シーケンス</p>
-      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-        {sequence.map((item, idx) => {
-          const checked = !!(checks && checks[idx]);
-          return (
-            <div key={idx} onClick={() => onToggle(idx)} style={{
-              display:"flex", alignItems:"center", gap:10,
-              background: checked ? "rgba(56,161,105,.1)" : "rgba(255,255,255,.6)",
-              border:"none", borderRadius:8, padding:"8px 10px", cursor:"pointer",
-            }}>
-              <Checkbox checked={checked} onClick={() => onToggle(idx)} />
-              <span style={{
-                fontSize:13, lineHeight:1.5, flex:1,
-                color: checked ? "#276749" : "#78350f",
-                textDecoration: checked ? "line-through" : "none",
-              }}>{item}</span>
-            </div>
-          );
-        })}
-      </div>
+    <div>
+      {carried.length > 0 && (
+        <div style={{ marginBottom:12 }}>
+          <p style={{ margin:"0 0 6px", fontSize:11, fontWeight:700, color:"#e53e3e" }}>⏮ 昨日までの未完了（{carried.length}）</p>
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {carried.map(t => <SequenceRow key={t.id} todo={t} onToggle={onToggle} carried />)}
+          </div>
+        </div>
+      )}
+
+      {today.length > 0 && (
+        <div>
+          {carried.length > 0 && <p style={{ margin:"0 0 6px", fontSize:11, fontWeight:700, color:"#b45309" }}>🔥 今日（{today.length}）</p>}
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {today.map(t => <SequenceRow key={t.id} todo={t} onToggle={onToggle} />)}
+          </div>
+        </div>
+      )}
+
       <p style={{ margin:"10px 0 0", fontSize:11, color:"#b45309", textAlign:"right" }}>
-        {doneCount} / {sequence.length} 完了
+        {doneCount} / {total} 完了
       </p>
     </div>
   );

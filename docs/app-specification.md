@@ -205,11 +205,20 @@ LS_PREFIX: `journal_v1_`
   grateful: string,
   todayGoal: string,
   tomorrowGoal: string,
-  memo: string,
-  sequence: string[],            // 配列形式の箇条書き
-  sequenceChecks: {[idx]: bool}  // 各行のチェック状態
+  memo: string
 }
 ```
+※ 旧 `sequence` / `sequenceChecks` は廃止（v0.12）。「今日の稼働シーケンス」は
+ToDoから導出する派生ビューになり、実行タスクのデータは `todos` に一元化された。
+既存エントリに残る旧キーは読み飛ばされる（削除はしない）。
+
+### 今日の稼働シーケンス（派生ビュー・保存しない）
+`buildTodaySequence(todos, today)` が `todos` から算出する。
+- 対象：`dueDate <= today` のToDo
+- `carried`（`dueDate < today` の繰り越し）と `today` に分けて表示
+- 並び順は配列の格納順＝AIが提案した実行順（朝→夜の物理動線）
+- チェックすると実体のToDoが `done: true` になる
+- 記録タブのダンプモードの「上」に配置。既定は折りたたみで、ダンプ整理の直後に自動展開
 
 ### TodoObj
 ```

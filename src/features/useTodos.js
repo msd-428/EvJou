@@ -11,7 +11,9 @@ export function useTodos(settings) {
   const [todoInput, setTodoInput] = useState("");
 
   // 保存（完了ToDoの件数制限を適用）。useStorage が自動で永続化する。
-  const saveTodos = (next) => setTodos(pruneTodos(next, settings.limitDoneTodos));
+  // 関数アップデータも受け付ける（提案タスクを1件ずつ連続で追加しても取りこぼさないため）。
+  const saveTodos = (next) => setTodos(prev =>
+    pruneTodos(typeof next === "function" ? next(prev) : next, settings.limitDoneTodos));
 
   const addTodoManual = () => {
     const text = todoInput.trim();
@@ -37,16 +39,18 @@ export function useTodos(settings) {
   // 日記保存・ダンプ整理の両方から呼ばれる共通処理。
   const addExtractedTodos = (extracted, baseDate) => {
     if (!extracted?.length) return;
-    const existing = new Set(todos.map(t => t.text));
-    const newTodos = extracted
-      .filter(e => e.text && !existing.has(e.text))
-      .map(e => ({
-        id: uid(), text: e.text, done: false,
-        source: "ai-" + (e.when || "today"),
-        createdAt: baseDate,
-        dueDate: e.when === "tomorrow" ? getOffsetDate(baseDate, 1) : baseDate,
-      }));
-    if (newTodos.length > 0) saveTodos([...todos, ...newTodos]);
+    saveTodos(prev => {
+      const existing = new Set(prev.map(t => t.text));
+      const newTodos = extracted
+        .filter(e => e.text && !existing.has(e.text))
+        .map(e => ({
+          id: uid(), text: e.text, done: false,
+          source: "ai-" + (e.when || "today"),
+          createdAt: baseDate,
+          dueDate: e.when === "tomorrow" ? getOffsetDate(baseDate, 1) : baseDate,
+        }));
+      return newTodos.length > 0 ? [...prev, ...newTodos] : prev;
+    });
   };
 
   return {

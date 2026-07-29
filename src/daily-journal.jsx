@@ -5,9 +5,9 @@ import { useState, useEffect, useRef } from "react";
 import {
   COLORS, MAIN_TABS, ROUTINE_TABS, AI_SUB_TABS, DEFAULT_SETTINGS,
 } from "./constants.js";
-import { fmtDate, fmtShort, getRecentDates } from "./lib/date.js";
+import { fmtDate, fmtShort, todayStr, getRecentDates } from "./lib/date.js";
 import {
-  emptyForm, emptyGoals, normalizeSequence, normalizeRoutines,
+  emptyForm, emptyGoals, normalizeRoutines, buildTodaySequence,
   isRoutineDue, scheduleSummary, pruneByDateKey, pruneTodos,
 } from "./lib/domain.js";
 import { PERSONAS, DEFAULT_AI_CONFIG, applyAiConfig, callAI, getAiConfig } from "./api/client.js";
@@ -23,7 +23,7 @@ import { useJournal } from "./features/useJournal.js";
 
 import { Btn, TabBar, SaveToast, BottomSheet, DateSelector, CollapseSection, SettingButton, Banner, AIResult, EmptyState } from "./components/common.jsx";
 import { ScheduleBlock, BaseScheduleEditor } from "./components/schedule.jsx";
-import { SequenceChecklist, GoalEditor } from "./components/journal.jsx";
+import { TodaySequence, GoalEditor } from "./components/journal.jsx";
 import { TodoListGrouped } from "./components/todo.jsx";
 import { RoutineCheckView, RoutineStats, RoutineScheduleEditor } from "./components/routine.jsx";
 import { GeneralSettings, AiSettings } from "./components/settings.jsx";
@@ -87,20 +87,31 @@ export default function App() {
   const {
     entries, setEntries, form, setForm, selDate, setSelDate, saved,
     dumpText, setDumpText, dumpLoading, showDump, setShowDump,
+    showSequence, setShowSequence,
     showSaveToast, hideToast, proposedTodos, setProposedTodos,
-    updateField, saveEntry, runDumpProcess, clearDump, toggleSequenceCheck,
+    updateField, saveEntry, runDumpProcess, clearDump,
   } = useJournal({ settings, goals });
 
-  // AI提案タスクの承認。ToDo・ルーチンそれぞれ 1回の更新にまとめてから投入する。
-  const handleApproveProposed = () => {
-    const selected = proposedTodos.filter(p => p.selected);
-    const toTodo = selected.filter(p => p.when !== "routine").map(p => ({ text: p.text, when: p.when }));
-    const toRoutine = selected.filter(p => p.when === "routine").map(p => p.text);
+  // 今日の稼働シーケンス（ToDoからの派生ビュー。独自データは持たない）
+  const todaySequence = buildTodaySequence(todos, todayStr());
 
-    if (toTodo.length > 0) addExtractedTodos(toTodo, selDate);
-    const rejected = toRoutine.length > 0 ? addRoutinesDirect(toRoutine) : 0;
-    if (rejected > 0) alert(`${rejected}件のルーチンは上限超過または重複のため追加できませんでした。`);
+  // 提案タスクを1件ずつ仕分ける。押した瞬間に消えて手応えが出るようリストから即座に取り除く。
+  const fileProposal = (p, when) => {
+    if (when === "routine") {
+      const rejected = addRoutinesDirect([p.text]);
+      if (rejected > 0) { alert("ルーチンの上限超過、または既に同じルーチンがあります。"); return; }
+    } else {
+      addExtractedTodos([{ text: p.text, when }], selDate);
+      if (when === "today") setShowSequence(true);   // 追加結果がすぐ見えるように開く
+    }
+    setProposedTodos(prev => prev.filter(item => item.id !== p.id));
+  };
 
+  // 残り全部を今日のToDoへ（提案順＝実行順を保ったまま投入）
+  const fileAllToday = () => {
+    if (proposedTodos.length === 0) return;
+    addExtractedTodos(proposedTodos.map(p => ({ text: p.text, when: "today" })), selDate);
+    setShowSequence(true);
     setProposedTodos([]);
   };
 
@@ -455,6 +466,19 @@ ${routineSummary}
         <div>
           <DateSelector value={selDate} onChange={setSelDate} />
 
+          {/* 今日の稼働シーケンス（ToDoの派生ビュー。ダンプ整理の直後に自動で開く） */}
+          <CollapseSection
+            open={showSequence} onToggle={() => setShowSequence(!showSequence)}
+            title="🎯 今日の稼働シーケンス" titleColor="#b45309"
+            openBorder="2px solid #fcd34d" closedBg="#fff7e6" closedBorder="1px solid #fcd34d"
+            compact
+            closedHint={todaySequence.total > 0
+              ? `（${todaySequence.doneCount}/${todaySequence.total} 完了${todaySequence.carried.length > 0 ? ` ・繰り越し${todaySequence.carried.length}` : ""}）`
+              : "（今日の稼働はまだありません）"}
+          >
+            <TodaySequence sequence={todaySequence} onToggle={toggleTodo} />
+          </CollapseSection>
+
           {/* ダンプモード */}
           {settings.showDumpMode && (
           <CollapseSection
@@ -475,7 +499,6 @@ ${routineSummary}
               </Btn>
               <Btn variant="ghost" onClick={clearDump} disabled={dumpLoading || !dumpText} style={{ flex:1, padding:"12px" }}>🗑 クリア</Btn>
             </div>
-            <SequenceChecklist sequence={form.sequence} checks={form.sequenceChecks} onToggle={toggleSequenceCheck} />
           </CollapseSection>
           )}
 
@@ -519,30 +542,35 @@ ${routineSummary}
               <h4 style={{ margin: "0 0 12px", color: "#6c63ff", fontSize: 15, display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ fontSize: 18 }}>✨</span> AIからの提案タスク
               </h4>
-              <p style={{ margin: "0 0 12px", fontSize: 12, color: "#666" }}>追加先を選んで承認してください。</p>
-              <div style={{ display:"flex", flexDirection:"column", gap: 8, marginBottom: 16 }}>
+              <p style={{ margin: "0 0 12px", fontSize: 12, color: "#666" }}>1件ずつ仕分けてください。「今日へ」で稼働シーケンスに並びます。</p>
+              <div style={{ display:"flex", flexDirection:"column", gap: 8, marginBottom: 14 }}>
                 {proposedTodos.map((p) => (
-                  <div key={p.id} style={{ display:"flex", alignItems:"center", gap: 10, background:"#fff", padding: "10px 12px", borderRadius: 8, border: "1px solid #e0dcd5" }}>
-                    <input type="checkbox" checked={p.selected} onChange={e => {
-                      const checked = e.target.checked;
-                      setProposedTodos(prev => prev.map(item => item.id === p.id ? { ...item, selected: checked } : item));
-                    }} style={{ width: 18, height: 18, accentColor: "#6c63ff", cursor: "pointer", margin: 0 }} />
-                    <span style={{ flex: 1, fontSize: 14, color: p.selected ? "#333" : "#aaa", textDecoration: p.selected ? "none" : "line-through", wordBreak: "break-word" }}>
-                      {p.text}
-                    </span>
-                    <select value={p.when} disabled={!p.selected} onChange={e => {
-                      const when = e.target.value;
-                      setProposedTodos(prev => prev.map(item => item.id === p.id ? { ...item, when } : item));
-                    }} style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", fontSize: 12, background: p.selected ? "#fafafa" : "#eee", color: p.selected ? "#333" : "#999", outline: "none", cursor: p.selected ? "pointer" : "default" }}>
-                      <option value="today">今日のToDo</option>
-                      <option value="tomorrow">明日のToDo</option>
-                      <option value="routine">ルーティン</option>
-                    </select>
+                  <div key={p.id} style={{ background:"#fff", padding: "10px 12px", borderRadius: 10, border: "1px solid #e0dcd5" }}>
+                    <p style={{ margin: "0 0 8px", fontSize: 14, color: "#333", lineHeight: 1.5, wordBreak: "break-word" }}>{p.text}</p>
+                    <div style={{ display:"flex", alignItems:"stretch", gap: 6 }}>
+                      <button onClick={() => fileProposal(p, "today")} style={{
+                        flex: 1, padding: "10px 12px", borderRadius: 8, border: "none", cursor: "pointer",
+                        background: "#6c63ff", color: "#fff", fontWeight: 700, fontSize: 14,
+                      }}>🔥 今日へ</button>
+                      {[
+                        { when: "tomorrow", icon: "📅", title: "明日のToDoへ", color: "#3182ce", bg: "#ebf8ff" },
+                        { when: "routine",  icon: "🔄", title: "ルーチンへ",   color: "#38a169", bg: "#f0fff4" },
+                      ].map(b => (
+                        <button key={b.when} onClick={() => fileProposal(p, b.when)} title={b.title} aria-label={b.title}
+                          style={{
+                            width: 46, padding: 0, borderRadius: 8, border: "none", cursor: "pointer",
+                            background: b.bg, color: b.color, fontSize: 17, flexShrink: 0,
+                          }}>{b.icon}</button>
+                      ))}
+                      <button onClick={() => setProposedTodos(prev => prev.filter(i => i.id !== p.id))}
+                        title="この提案を捨てる" aria-label="この提案を捨てる"
+                        style={{ width: 36, padding: 0, borderRadius: 8, border: "none", cursor: "pointer", background: "none", color: "#ccc", fontSize: 15, flexShrink: 0 }}>✕</button>
+                    </div>
                   </div>
                 ))}
               </div>
               <div style={{ display:"flex", gap: 8 }}>
-                <Btn variant="primary" onClick={handleApproveProposed} style={{ flex: 2, padding: "11px", fontWeight: 700 }}>✅ 選択したものを追加</Btn>
+                <Btn variant="primary" onClick={fileAllToday} style={{ flex: 2, padding: "11px", fontWeight: 700 }}>⚡ すべて今日へ</Btn>
                 <Btn variant="ghost" onClick={() => setProposedTodos([])} style={{ flex: 1, padding: "11px", color: "#888" }}>すべて破棄</Btn>
               </div>
             </div>
@@ -788,7 +816,6 @@ ${routineSummary}
                 <p style={{ textAlign:"center", color:"#aaa", padding:40 }}>まだ記録がありません</p>
               ) : sortedDates.map(d => {
                 const e = entries[d];
-                const seq = normalizeSequence(e.sequence);
                 return (
                   <div key={d} style={{ background:"#fff", borderRadius:12, padding:16, marginBottom:12, boxShadow:"0 1px 4px rgba(0,0,0,.08)" }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
@@ -804,21 +831,6 @@ ${routineSummary}
                         <p style={{ margin:"2px 0 0", fontSize:13, color:"#444", lineHeight:1.6 }}>{e[f.key]}</p>
                       </div>
                     ))}
-                    {seq.length > 0 && (
-                      <div style={{ marginTop:7, background:"#fff7e6", borderRadius:8, padding:"8px 12px" }}>
-                        <span style={{ fontSize:11, color:"#92400e", fontWeight:700 }}>🎯 稼働シーケンス</span>
-                        {seq.map((item, idx) => {
-                          const checked = !!(e.sequenceChecks && e.sequenceChecks[idx]);
-                          return (
-                            <p key={idx} style={{
-                              margin:"3px 0 0", fontSize:12, lineHeight:1.5,
-                              color: checked ? "#276749" : "#78350f",
-                              textDecoration: checked ? "line-through" : "none",
-                            }}>{checked ? "✓" : "・"} {item}</p>
-                          );
-                        })}
-                      </div>
-                    )}
                   </div>
                 );
               })}

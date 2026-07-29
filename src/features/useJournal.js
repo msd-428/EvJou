@@ -3,7 +3,7 @@ import { useStorage } from "../storage/useStorage.js";
 import { storageSet, storageSetSync } from "../storage/index.js";
 import { App as CapApp } from '@capacitor/app';
 import { todayStr } from "../lib/date.js";
-import { emptyForm, normalizeSequence, pruneByDateKey } from "../lib/domain.js";
+import { emptyForm, pruneByDateKey } from "../lib/domain.js";
 import { dumpProcess, extractTodos } from "../api/prompts.js";
 import { uid } from "../lib/id.js";
 
@@ -27,6 +27,8 @@ export function useJournal({ settings, goals }) {
   const [dumpText, setDumpText] = useState("今日はとても疲れた。明日は午前中に資料作成を終わらせて、午後から新しい技術の勉強をする。毎日寝る前にストレッチをする習慣をつけたい。");
   const [dumpLoading, setDumpLoading] = useState(false);
   const [showDump, setShowDump] = useState(false);
+  // 稼働シーケンスは初期状態では畳んでおき、ダンプ整理の直後に開く（入力への報酬としての見せ方）
+  const [showSequence, setShowSequence] = useState(false);
 
   const [proposedTodos, setProposedTodos] = useState([]);
 
@@ -48,10 +50,7 @@ export function useJournal({ settings, goals }) {
   // 日付変更時にフォーム同期（同期は外部由来なのでdirtyを立てない）
   useEffect(() => {
     if (entries[selDate]) {
-      const entry = { ...emptyForm(fields), ...entries[selDate] };
-      entry.sequence = normalizeSequence(entry.sequence);
-      entry.sequenceChecks = entry.sequenceChecks || {};
-      setForm(entry);
+      setForm({ ...emptyForm(fields), ...entries[selDate] });
     } else {
       setForm(emptyForm(fields));
     }
@@ -136,7 +135,7 @@ export function useJournal({ settings, goals }) {
     try {
       const extracted = await extractTodos(form.todayGoal, form.tomorrowGoal);
       if (extracted?.length > 0) {
-        setProposedTodos(extracted.map(e => ({ id: uid(), text: e.text, when: e.when || "today", selected: true })));
+        setProposedTodos(extracted.map(e => ({ id: uid(), text: e.text, when: e.when || "today" })));
       }
     } catch {}
   };
@@ -147,17 +146,18 @@ export function useJournal({ settings, goals }) {
     setDumpLoading(true);
     try {
       const result = await dumpProcess(dumpText, form, goals, fields);
-      const newForm = { sequence: result.sequence, sequenceChecks: {} };
+      const newForm = {};
       for (const f of fields) newForm[f.key] = result[f.key] || form[f.key] || "";
       setForm(newForm);
       dirtyRef.current = false;
       saveEntryState(newForm);
       showToast();
+      setShowSequence(true);   // 整理できた実感として稼働シーケンスを開く
 
       if (settings.autoExtractOnDump) try {
         const extracted = await extractTodos(newForm.todayGoal, newForm.tomorrowGoal);
         if (extracted?.length > 0) {
-          setProposedTodos(extracted.map(e => ({ id: uid(), text: e.text, when: e.when || "today", selected: true })));
+          setProposedTodos(extracted.map(e => ({ id: uid(), text: e.text, when: e.when || "today" })));
         }
       } catch {}
     } catch (err) {
@@ -177,19 +177,11 @@ export function useJournal({ settings, goals }) {
     setForm({ ...form, [key]: value });
   };
 
-  // ─── 稼働シーケンス個別チェック ───
-  const toggleSequenceCheck = (idx) => {
-    const checks = { ...(form.sequenceChecks || {}) };
-    checks[idx] = !checks[idx];
-    const newForm = { ...form, sequenceChecks: checks };
-    setForm(newForm);
-    saveEntryState(newForm);
-  };
-
   return {
     entries, setEntries, form, setForm, selDate, setSelDate, saved,
     dumpText, setDumpText, dumpLoading, showDump, setShowDump,
+    showSequence, setShowSequence,
     showSaveToast, hideToast, proposedTodos, setProposedTodos,
-    updateField, saveEntry, runDumpProcess, clearDump, toggleSequenceCheck,
+    updateField, saveEntry, runDumpProcess, clearDump,
   };
 }

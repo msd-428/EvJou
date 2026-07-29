@@ -34,7 +34,7 @@ export function normalizeJournalFields(fields, hiddenFields) {
 
 // 空フォーム。項目はユーザー設定で増減するので定義から組み立てる。
 export const emptyForm = (fields = DEFAULT_JOURNAL_FIELDS) => {
-  const form = { sequence: [], sequenceChecks: {} };
+  const form = {};
   for (const f of fields) form[f.key] = "";
   return form;
 };
@@ -52,13 +52,21 @@ export function getTodoGroup(dueDate) {
 }
 
 // ─── 稼働シーケンス ───
-// sequenceを常に配列に正規化（旧形式の文字列も配列化）
-export function normalizeSequence(seq) {
-  if (Array.isArray(seq)) return seq.filter(Boolean);
-  if (typeof seq === "string") {
-    return seq.split("\n").map(s => s.replace(/^[-・•*]\s*/, "").trim()).filter(Boolean);
-  }
-  return [];
+// ToDoから導出する派生ビュー。シーケンス自体は保存しない（データはtodosに一元化）。
+// 対象は「期限が今日以前」のToDo。繰り越し（昨日以前）と今日ぶんを分けて返す。
+// 並び順は配列の格納順を維持する（AIが朝→夜の動線順で提案し、その順に追加されるため）。
+export function buildTodaySequence(todos, today = todayStr()) {
+  const inScope = (todos || []).filter(t => t.dueDate && t.dueDate <= today);
+  const carried = inScope.filter(t => t.dueDate < today)
+                         .sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
+  const todayItems = inScope.filter(t => t.dueDate === today);
+  const all = [...carried, ...todayItems];
+  return {
+    carried,
+    today: todayItems,
+    total: all.length,
+    doneCount: all.filter(t => t.done).length,
+  };
 }
 
 // ─── ルーチンのスケジュール ───

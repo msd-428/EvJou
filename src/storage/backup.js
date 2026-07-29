@@ -11,7 +11,9 @@ export function exportData(payload) {
   a.href = url;
   a.download = "journal-backup-" + todayStr() + ".json";
   a.click();
-  URL.revokeObjectURL(url);
+  // 旧WebView（Android 9世代のChrome 74等）では click() 直後に revoke すると
+  // ダウンロードが始まる前にURLが無効化され、保存が失敗することがある。解放は遅延させる。
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
 export function importDataFile(file) {

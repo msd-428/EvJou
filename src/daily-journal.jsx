@@ -10,7 +10,7 @@ import {
   emptyForm, emptyGoals, normalizeRoutines, buildTodaySequence,
   isRoutineDue, scheduleSummary, pruneByDateKey, pruneTodos,
 } from "./lib/domain.js";
-import { PERSONAS, DEFAULT_AI_CONFIG, applyAiConfig, callAI } from "./api/client.js";
+import { PERSONAS, DEFAULT_AI_CONFIG, applyAiConfig, callAI, setProxyConsentHandler } from "./api/client.js";
 import {
   storageGet, storageSet, storageRemove, exportData, importDataFile,
 } from "./storage/index.js";
@@ -137,16 +137,16 @@ export default function App() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMsgs, chatLoading]);
 
-  // EvJou AI 初回同意チェック。同意済みなら true、未同意なら確認ダイアログを出す。
-  const checkProxyConsent = () => {
-    if (aiCfg.mode !== "proxy" || aiCfg.proxyConsent) return true;
-    if (window.confirm("EvJou AIを利用すると、日記の内容が開発者のサーバーに送信されます。\nサーバー上にデータは保存されません。\n\n利用しますか？")) {
-      const next = { ...aiCfg, proxyConsent: true };
-      saveAiCfg(next);
+  // EvJou AI 初回同意のUI。実際にいつ聞くかは送信の入口（callProxy）が決める。
+  // ここは「聞き方」と「同意の永続化」だけを担当し、AI呼び出し側には一切ばらまかない。
+  useEffect(() => {
+    setProxyConsentHandler(() => {
+      if (aiCfg.proxyConsent) return true;
+      if (!window.confirm("EvJou AIを利用すると、日記の内容が開発者のサーバーに送信されます。\nサーバー上にデータは保存されません。\n\n利用しますか？")) return false;
+      saveAiCfg({ ...aiCfg, proxyConsent: true });
       return true;
-    }
-    return false;
-  };
+    });
+  }, [aiCfg, saveAiCfg]);
 
   // AI呼び出し結果から本日の利用回数を更新
   const updateRemaining = (result) => {
@@ -159,6 +159,7 @@ export default function App() {
 
   // AIエラーのメッセージ生成
   const aiErrorMessage = (err) => {
+    if (err?.type === "consent") return "EvJou AIの利用には同意が必要です。もう一度実行すると確認画面が表示されます。";
     if (err?.type === "rate_limit") return "AI利用制限に達しました。しばらくしてからお試しください。";
     if (err?.type === "server_down") return "AIサーバーがメンテナンス中です。日記やToDoは通常通り使えます。";
     if (err?.type === "auth") return "認証に失敗しました。アプリを再起動してください。";
@@ -197,7 +198,9 @@ ${openTodos}
   };
 
   // チャット画面を開くだけ。AI呼び出しはユーザーが明示的にボタンを押した時のみ走らせる。
+  // 別の日付から開いた場合は参照コンテキストが変わるので、会話を無言でリセットして開始する。
   const openChat = (date) => {
+    if (date !== selDate) { setChatMsgs([]); setChatInput(""); }
     setSelDate(date);
     setAiSubTab("chat");
     setTab("ai");
@@ -206,7 +209,6 @@ ${openTodos}
   // 「AIから話しかけてもらう」。会話が空のときだけ押せる想定。
   const generateChatOpener = async () => {
     if (chatLoading) return;
-    if (!checkProxyConsent()) return;
     setChatLoading(true);
     try {
       const result = await callAI(
@@ -234,7 +236,6 @@ ${openTodos}
 
   const sendChat = async () => {
     if (!chatInput.trim() || chatLoading) return;
-    if (!checkProxyConsent()) return;
     const next = [...chatMsgs, { role: "user", content: chatInput.trim() }];
     setChatMsgs(next); setChatInput(""); setChatLoading(true);
     try {
@@ -250,7 +251,6 @@ ${openTodos}
 
   const runTrend = async () => {
     if (trendLoading) return;
-    if (!checkProxyConsent()) return;
     setTrendLoading(true);
     const recent = Object.keys(entries).sort().slice(-7).map(d => {
       const e = entries[d];
@@ -268,7 +268,6 @@ ${openTodos}
 
   const runGoals = async () => {
     if (goalsLoading) return;
-    if (!checkProxyConsent()) return;
     setGoalsLoading(true);
     const recent = Object.keys(entries).sort().slice(-14).map(d => {
       const e = entries[d];

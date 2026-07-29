@@ -38,6 +38,12 @@ let aiConfig = { ...DEFAULT_AI_CONFIG };
 export const applyAiConfig = (cfg) => { aiConfig = { ...DEFAULT_AI_CONFIG, ...cfg }; };
 export const getAiConfig = () => aiConfig;
 
+// 同意ダイアログの出し方と同意の永続化はUI層の責務なので、ここでは「同意を取る手段」だけを預かる。
+// 未登録なら同意なしとして扱う（＝黙って送信することはない）。
+// handler は Promise<boolean> または boolean を返す。
+let proxyConsentHandler = null;
+export const setProxyConsentHandler = (fn) => { proxyConsentHandler = fn; };
+
 // ── エラーヘルパー ──
 // type: "rate_limit" | "server_down" | "auth" | "network" | "generic"
 function aiError(message, type = "generic") {
@@ -57,7 +63,20 @@ const PROXY_ACK_MS = 60000;       // 受理されない＝ワーカー不在と�
 const PROXY_PROGRESS_MS = 180000; // 受理後、文書の更新が途絶えたとみなす
 const PROXY_MAX_MS = 600000;      // 何があっても待ち続けない絶対上限
 
+// 日記本文が開発者のサーバーへ出ていく入口はこの callProxy 1箇所だけなので、
+// 同意の確認もここへ集約する。UI各所（チャット・傾向・ダンプ整理・ToDo抽出・予定生成）に
+// 撒く方式では、呼び出し経路が増えるたびに必ず抜けが出る。
+async function ensureProxyConsent() {
+  if (aiConfig.proxyConsent) return;
+  const granted = proxyConsentHandler ? await proxyConsentHandler() : false;
+  if (!granted) throw aiError("EvJou AIの利用には同意が必要です。", "consent");
+  // 同意直後の連続呼び出しで二重に聞かないよう、ここでも即座に反映する
+  // （UI側の保存 → applyAiConfig は非同期なので間に合わないことがある）。
+  aiConfig = { ...aiConfig, proxyConsent: true };
+}
+
 async function callProxy(messages, system, maxTokens, onStatusChange) {
+  await ensureProxyConsent();
   const user = await ensureAuth();
   const db = getDb();
   const msgs = system ? [{ role: "system", content: system }, ...messages] : messages;

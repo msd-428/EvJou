@@ -7,3 +7,10 @@ dist-ssr
 
 # Firebase サービスアカウント秘密鍵。絶対にコミットしない。
 proxy/serviceAccountKey.json
+
+# Android のリリース署名鍵とパスワード。絶対にコミットしない。
+# 公開されると誰でも同一署名のAPKを作れる＝アップデートのなりすましが可能になる。
+# 鍵は差し替えると既存インストールのアップデート経路が切れるため、失っても漏らしても復旧できない。
+android/app/*.keystore
+android/app/*.jks
+android/keystore.properties

@@ -173,12 +173,44 @@ export function Banner({ type, children }) {
   );
 }
 
-export function AIResult({ loading, text, placeholder, loadingText }) {
+export function AIResult({ loading, text, loadingText, onRegenerate, regenerateLabel = "🔄 もう一度分析する" }) {
   return (
     <div style={{ background:"#fff", borderRadius:12, padding:20, minHeight:200, boxShadow:"0 1px 4px rgba(0,0,0,.08)" }}>
-      {loading ? <p style={{ color:"#888", textAlign:"center", paddingTop:40 }}>{loadingText || "分析中..."}</p>
-        : text ? <div style={{ fontSize:14, lineHeight:1.8, color:"#333", whiteSpace:"pre-wrap" }}>{text}</div>
-        : <p style={{ color:"#bbb", textAlign:"center", paddingTop:40, fontSize:14 }}>{placeholder}</p>}
+      {loading
+        ? <p style={{ color:"#888", textAlign:"center", paddingTop:40 }}>{loadingText || "分析中..."}</p>
+        : <div style={{ fontSize:14, lineHeight:1.8, color:"#333", whiteSpace:"pre-wrap" }}>{text}</div>}
+      {!loading && text && onRegenerate && (
+        <div style={{ marginTop:18, paddingTop:14, borderTop:`1px solid ${COLORS.border}`, textAlign:"center" }}>
+          <Btn variant="ghost" onClick={onRegenerate} style={{ padding:"9px 18px", fontSize:13 }}>{regenerateLabel}</Btn>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// AI生成を「明示的に押した時だけ」走らせるための誘導パネル。
+// サブタブを開いた瞬間の自動発火を廃止した代わりに、各AI画面の初期状態へ置く。
+// plain=true でカードの装飾を外し、既に白背景のコンテナ（チャット欄）へ埋め込める。
+export function AiActionPanel({ icon, title, desc, actionLabel, onAction, disabled, disabledHint, plain }) {
+  const card = plain ? {} : {
+    background: COLORS.white, borderRadius: 14,
+    border: `1px dashed #d8d3f5`, boxShadow: "0 1px 4px rgba(0,0,0,.06)",
+  };
+  return (
+    <div style={{ textAlign:"center", padding: plain ? "34px 16px" : "40px 22px", ...card }}>
+      <div style={{ fontSize:40, marginBottom:12, opacity:.9 }}>{icon}</div>
+      <p style={{ margin:"0 0 8px", fontWeight:700, fontSize:15, color:COLORS.text }}>{title}</p>
+      <p style={{ margin:"0 auto 20px", maxWidth:340, fontSize:12.5, color:COLORS.textSub, lineHeight:1.8 }}>{desc}</p>
+      <button onClick={onAction} disabled={disabled} style={{
+        border:"none", borderRadius:999, padding:"13px 28px", fontSize:14.5, fontWeight:700,
+        color: COLORS.white, background: "linear-gradient(135deg, #8079ff 0%, #6c63ff 55%, #5a51e0 100%)",
+        cursor: disabled ? "default" : "pointer",
+        opacity: disabled ? 0.4 : 1,
+        boxShadow: disabled ? "none" : "0 6px 16px rgba(108,99,255,.32)",
+      }}>{actionLabel}</button>
+      {disabled && disabledHint && (
+        <p style={{ margin:"14px 0 0", fontSize:11.5, color:"#bbb" }}>{disabledHint}</p>
+      )}
     </div>
   );
 }

@@ -21,7 +21,7 @@ import { useSchedule } from "./features/useSchedule.js";
 import { useSettings } from "./features/useSettings.js";
 import { useJournal } from "./features/useJournal.js";
 
-import { Btn, TabBar, SaveToast, BottomSheet, DateSelector, CollapseSection, SettingButton, Banner, AIResult, EmptyState } from "./components/common.jsx";
+import { Btn, TabBar, SaveToast, BottomSheet, DateSelector, CollapseSection, SettingButton, Banner, AIResult, AiActionPanel, EmptyState } from "./components/common.jsx";
 import { ScheduleBlock, BaseScheduleEditor } from "./components/schedule.jsx";
 import { TodaySequence, GoalEditor } from "./components/journal.jsx";
 import { TodoListGrouped } from "./components/todo.jsx";
@@ -131,7 +131,11 @@ export default function App() {
     })();
   }, []);
 
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMsgs, chatLoading]);
+  // 会話が始まってからだけ追従する（空の初期状態で勝手にスクロールさせない）
+  useEffect(() => {
+    if (chatMsgs.length === 0 && !chatLoading) return;
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMsgs, chatLoading]);
 
   // EvJou AI 初回同意チェック。同意済みなら true、未同意なら確認ダイアログを出す。
   const checkProxyConsent = () => {
@@ -164,6 +168,9 @@ export default function App() {
 
   const todaySched = generatedScheds[selDate] || null;
   const sortedDates = Object.keys(entries).sort().reverse();
+  // 分析対象が皆無ならAIを叩いても意味がないので、ボタン自体を押させない
+  const hasEntries = sortedDates.length > 0;
+  const hasGoals = !!(goals.bigGoal || goals.midGoal || goals.nearGoal);
 
   // ─── AI ───
   const buildChatSystem = (date) => {
@@ -189,13 +196,22 @@ ${openTodos}
 最初のメッセージでは内容を簡潔にまとめてコメントし「何か話したいことはありますか？」と聞いてください。`;
   };
 
-  const startChat = async (date) => {
+  // チャット画面を開くだけ。AI呼び出しはユーザーが明示的にボタンを押した時のみ走らせる。
+  const openChat = (date) => {
+    setSelDate(date);
+    setAiSubTab("chat");
+    setTab("ai");
+  };
+
+  // 「AIから話しかけてもらう」。会話が空のときだけ押せる想定。
+  const generateChatOpener = async () => {
+    if (chatLoading) return;
     if (!checkProxyConsent()) return;
-    setAiSubTab("chat"); setTab("ai"); setChatMsgs([]); setChatLoading(true);
+    setChatLoading(true);
     try {
       const result = await callAI(
         [{ role: "user", content: "今日のエントリをまとめてコメントしてください。" }],
-        buildChatSystem(date),
+        buildChatSystem(selDate),
         1200,
         onAiStatus
       );
@@ -206,6 +222,14 @@ ${openTodos}
     }
     setChatLoading(false);
     resetAiStatus();
+  };
+
+  // 会話を捨てて初期状態（開始ボタンのある画面）へ戻す。
+  const clearChat = () => {
+    if (chatLoading) return;
+    if (chatMsgs.length > 0 && !window.confirm("この会話を消去します。よろしいですか？")) return;
+    setChatMsgs([]);
+    setChatInput("");
   };
 
   const sendChat = async () => {
@@ -225,8 +249,9 @@ ${openTodos}
   };
 
   const runTrend = async () => {
+    if (trendLoading) return;
     if (!checkProxyConsent()) return;
-    setAiSubTab("trend"); setTrendLoading(true);
+    setTrendLoading(true);
     const recent = Object.keys(entries).sort().slice(-7).map(d => {
       const e = entries[d];
       const body = settings.journalFields.map(f => `${f.label}: ${e[f.key] || ""}`).join("\n");
@@ -242,8 +267,9 @@ ${openTodos}
   };
 
   const runGoals = async () => {
+    if (goalsLoading) return;
     if (!checkProxyConsent()) return;
-    setAiSubTab("goals"); setGoalsLoading(true);
+    setGoalsLoading(true);
     const recent = Object.keys(entries).sort().slice(-14).map(d => {
       const e = entries[d];
       const body = settings.journalFields.map(f => `${f.label}=「${e[f.key] || ""}」`).join(" ");
@@ -580,7 +606,7 @@ ${routineSummary}
             <Btn variant={saved ? "success" : "primary"} onClick={saveEntry} style={{ flex:2, padding:"13px" }}>
               {saved ? "✓ 保存しました！" : "💾 保存する"}
             </Btn>
-            <Btn variant="outline" onClick={() => startChat(selDate)} style={{ flex:1, padding:"13px" }}>🤖 AIと話す</Btn>
+            <Btn variant="outline" onClick={() => openChat(selDate)} style={{ flex:1, padding:"13px" }}>🤖 AIと話す</Btn>
           </div>
         </div>
       )}
@@ -761,17 +787,28 @@ ${routineSummary}
 
       {tab === "ai" && (
         <div>
-          <TabBar tabs={AI_SUB_TABS} active={aiSubTab} onChange={(t) => {
-            if (t === "chat") { if (chatMsgs.length === 0) startChat(selDate); else setAiSubTab("chat"); }
-            if (t === "trend") runTrend();
-            if (t === "goals") runGoals();
-            if (t === "history") setAiSubTab("history");
-          }} />
+          {/* サブタブの切り替えは表示のみ。AI生成は各画面のボタンからしか走らせない。 */}
+          <TabBar tabs={AI_SUB_TABS} active={aiSubTab} onChange={setAiSubTab} />
 
           {aiSubTab === "chat" && (
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, marginBottom:2 }}>
+                <span style={{ fontSize:11.5, color:"#aaa" }}>📅 {fmtDate(selDate)} の記録を参照</span>
+                {chatMsgs.length > 0 && (
+                  <Btn variant="ghost" small onClick={clearChat} disabled={chatLoading}>🗑 会話をクリア</Btn>
+                )}
+              </div>
               <div style={{ background:"#fff", borderRadius:12, padding:16, minHeight:300, maxHeight:420, overflowY:"auto", boxShadow:"0 1px 4px rgba(0,0,0,.08)" }}>
-                {chatMsgs.length === 0 && !chatLoading && <p style={{ color:"#bbb", textAlign:"center", paddingTop:40, fontSize:14 }}>「AIと話す」で会話を始めよう</p>}
+                {chatMsgs.length === 0 && !chatLoading && (
+                  <AiActionPanel
+                    plain
+                    icon="💬"
+                    title="会話を始めましょう"
+                    desc="下の入力欄から自分で話しかけてもOK。AIから切り出してほしいときは、このボタンを押してください。"
+                    actionLabel="🤖 AIから話しかけてもらう"
+                    onAction={generateChatOpener}
+                  />
+                )}
                 {chatMsgs.map((m, i) => {
                   const isUser = m.role === "user";
                   return (
@@ -804,8 +841,35 @@ ${routineSummary}
             </div>
           )}
 
-          {aiSubTab === "trend" && <AIResult loading={trendLoading} text={trendText} placeholder="直近7日を分析します" loadingText={aiLoadingMessage(aiLoadingStatus, aiQueuePos, "分析中...")} />}
-          {aiSubTab === "goals" && <AIResult loading={goalsLoading} text={goalsText} placeholder="目標と行動のギャップを分析します" loadingText={aiLoadingMessage(aiLoadingStatus, aiQueuePos, "分析中...")} />}
+          {aiSubTab === "trend" && (
+            (trendLoading || trendText)
+              ? <AIResult loading={trendLoading} text={trendText}
+                  loadingText={aiLoadingMessage(aiLoadingStatus, aiQueuePos, "分析中...")}
+                  onRegenerate={runTrend} regenerateLabel="🔄 傾向を読み直す" />
+              : <AiActionPanel
+                  icon="📈"
+                  title="直近7日の傾向を読み解く"
+                  desc="ここ1週間の記録をAIがまとめ、傾向・成長・次の一手を返します。ボタンを押したときだけ生成します。"
+                  actionLabel="✨ 傾向を読み解く"
+                  onAction={runTrend}
+                  disabled={!hasEntries}
+                  disabledHint="日記の記録がまだありません" />
+          )}
+
+          {aiSubTab === "goals" && (
+            (goalsLoading || goalsText)
+              ? <AIResult loading={goalsLoading} text={goalsText}
+                  loadingText={aiLoadingMessage(aiLoadingStatus, aiQueuePos, "分析中...")}
+                  onRegenerate={runGoals} regenerateLabel="🔄 目標を分析し直す" />
+              : <AiActionPanel
+                  icon="🎯"
+                  title="目標と行動のギャップを見る"
+                  desc="直近14日の記録・ToDo・ルーチン達成率を目標と突き合わせ、乖離と次のアクションを分析します。"
+                  actionLabel="✨ 分析を生成する"
+                  onAction={runGoals}
+                  disabled={!hasEntries && !hasGoals}
+                  disabledHint="目標か日記の記録を先に登録してください" />
+          )}
 
           {aiSubTab === "history" && (
             <div>
@@ -822,7 +886,7 @@ ${routineSummary}
                       <span style={{ fontWeight:700, color:"#6c63ff", fontSize:14 }}>{fmtDate(d)}</span>
                       <div style={{ display:"flex", gap:6 }}>
                         <Btn variant="ghost" small onClick={() => { setSelDate(d); setTab("write"); }}>編集</Btn>
-                        <Btn variant="outline" small onClick={() => { setSelDate(d); startChat(d); }}>🤖 AIと話す</Btn>
+                        <Btn variant="outline" small onClick={() => openChat(d)}>🤖 AIと話す</Btn>
                       </div>
                     </div>
                     {settings.journalFields.map(f => e[f.key] && (

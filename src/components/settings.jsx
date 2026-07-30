@@ -222,11 +222,7 @@ export function AiSettings({ cfg, onSave, aiUsage }) {
             開発者のAIサーバーを利用します。設定は不要です。<br/>
             <span style={{ color: COLORS.primary, fontWeight: 600 }}>※ローカルLLMのため、通常の使い方で上限に届くことはありません。</span>
           </p>
-          {aiUsage && (
-            <p style={{ margin:"0 0 6px", fontSize:12, color:COLORS.primary, fontWeight:700 }}>
-              本日のAI利用回数: {aiUsage.count} 回{aiUsage.limit ? ` / ${aiUsage.limit}` : ""}
-            </p>
-          )}
+
           <p style={{ margin:"0 0 6px", fontSize:11, color:COLORS.textSub, lineHeight:1.6 }}>
             利用時に日記の内容がサーバーに送信されます。サーバー上にデータは保存されません。
           </p>

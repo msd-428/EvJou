@@ -15,7 +15,7 @@ const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:7b';
 const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS || 120000); // 1回の推論の上限（ハング対策）
 const RETRY_MAX = 5;         // Ollama へのリトライ回数
 const RETRY_WAIT_MS = 5000;  // リトライ間隔
-const DAILY_LIMIT = Number(process.env.DAILY_LIMIT || 200); // 1日の利用上限（暴走対策の安全弁）
+const DAILY_LIMIT = Number(process.env.DAILY_LIMIT || 50); // 1日の利用上限（暴走対策・PC負荷軽減の安全弁）
 const KEEP_HOURS = Number(process.env.KEEP_HOURS || 24);    // 終了した文書の保持時間
 const SWEEP_INTERVAL_MS = 30 * 60 * 1000;
 

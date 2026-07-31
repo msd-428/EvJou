@@ -79,10 +79,26 @@
                 </a>
             </div>
 
-            <div class="hero-device-wrapper">
-                <div class="hero-device-glow"></div>
-                <div class="hero-device">
-                    <img src="assets/lp_record.png" alt="EvJou 記録画面" loading="eager">
+            <!-- 無限スクロールのマーキー。同じ並びを2セット置き、-50% でシームレスに繋ぐ。 -->
+            <div class="hero-marquee" aria-label="EvJou の画面">
+                <div class="marquee-track">
+                    <div class="device-frame"><img src="assets/shot_sequence.png" alt="今日の稼働シーケンス" loading="eager"></div>
+                    <div class="device-frame"><img src="assets/shot_dump.png" alt="ダンプモード" loading="eager"></div>
+                    <div class="device-frame"><img src="assets/shot_record.png" alt="記録" loading="eager"></div>
+                    <div class="device-frame"><img src="assets/shot_todo.png" alt="ToDo" loading="lazy"></div>
+                    <div class="device-frame"><img src="assets/shot_schedule.png" alt="AIが生成したスケジュール" loading="lazy"></div>
+                    <div class="device-frame"><img src="assets/shot_routine.png" alt="ルーチン" loading="lazy"></div>
+                    <div class="device-frame"><img src="assets/shot_ai_chat.png" alt="AIチャット" loading="lazy"></div>
+                    <div class="device-frame"><img src="assets/shot_settings.png" alt="AI設定" loading="lazy"></div>
+                    <!-- 複製（aria-hidden で読み上げ重複を防ぐ） -->
+                    <div class="device-frame" aria-hidden="true"><img src="assets/shot_sequence.png" alt="" loading="lazy"></div>
+                    <div class="device-frame" aria-hidden="true"><img src="assets/shot_dump.png" alt="" loading="lazy"></div>
+                    <div class="device-frame" aria-hidden="true"><img src="assets/shot_record.png" alt="" loading="lazy"></div>
+                    <div class="device-frame" aria-hidden="true"><img src="assets/shot_todo.png" alt="" loading="lazy"></div>
+                    <div class="device-frame" aria-hidden="true"><img src="assets/shot_schedule.png" alt="" loading="lazy"></div>
+                    <div class="device-frame" aria-hidden="true"><img src="assets/shot_routine.png" alt="" loading="lazy"></div>
+                    <div class="device-frame" aria-hidden="true"><img src="assets/shot_ai_chat.png" alt="" loading="lazy"></div>
+                    <div class="device-frame" aria-hidden="true"><img src="assets/shot_settings.png" alt="" loading="lazy"></div>
                 </div>
             </div>
 
@@ -110,7 +126,7 @@
                         <h3>思ったことを入力する</h3>
                         <p>「ダンプモード」を開いて、今日やりたいこと・思いついたアイデア・悩みを、整理せずにそのまま入力。箇条書きでもメモ書きでもOK。</p>
                         <div class="step-image-wrap">
-                            <img src="assets/dump_mode.jpg" alt="ダンプモード入力" loading="lazy">
+                            <img src="assets/shot_dump.png" alt="ダンプモードに思考をそのまま入力した状態" loading="lazy">
                         </div>
                     </div>
                 </div>
@@ -121,7 +137,7 @@
                         <h3>AIが自動で振り分け</h3>
                         <p>「✨ AIで整理する」を押すと、AIが内容を解釈。日記の各項目（感謝・今日の目標・明日の目標）に自動で振り分け、ToDoも抽出します。</p>
                         <div class="step-image-wrap">
-                            <img src="assets/lp_ai.png" alt="AIによる整理" loading="lazy">
+                            <img src="assets/shot_record.png" alt="AIが振り分けたジャーナル項目" loading="lazy">
                         </div>
                     </div>
                 </div>
@@ -129,10 +145,10 @@
                     <div class="step-number">3</div>
                     <div>
                         <div class="step-icon">🚀</div>
-                        <h3>あとは行動するだけ</h3>
-                        <p>整理されたToDoリストと、ルーチンを組み合わせた今日のスケジュールに沿って行動するだけ。毎日の達成率で習慣の定着も見える化。</p>
+                        <h3>上から順に、潰すだけ</h3>
+                        <p>整理されたToDoが「今日の稼働シーケンス」に並びます。朝いちの作業から夜の片付けまで、実際に体を動かす順番そのまま。次に何をやるか考える必要はありません。上から順にチェックしていくだけです。</p>
                         <div class="step-image-wrap">
-                            <img src="assets/lp_todo.png" alt="行動とタスク" loading="lazy">
+                            <img src="assets/shot_sequence.png" alt="今日の稼働シーケンス — 7件中3件完了" loading="lazy">
                         </div>
                     </div>
                 </div>
@@ -152,7 +168,7 @@
                 </div>
                 <div class="feature-visual">
                     <div class="feature-visual-inner">
-                        <img src="assets/dump_mode.jpg" alt="ダンプモードの実際の画面" loading="lazy">
+                        <img src="assets/shot_dump.png" alt="ダンプモードの実際の画面" loading="lazy">
                     </div>
                 </div>
             </div>
@@ -167,7 +183,7 @@
                 </div>
                 <div class="feature-visual">
                     <div class="feature-visual-inner">
-                        <img src="assets/lp_settings.png" alt="AI設定画面（接続先・人格切替）" loading="lazy">
+                        <img src="assets/shot_ai_chat.png" alt="AIチャットでの実際のやり取り" loading="lazy">
                     </div>
                 </div>
             </div>
@@ -191,10 +207,10 @@
                     <div class="card-content">
                         <div class="card-icon">📅</div>
                         <h3>1日のスケジュールをAIが作成</h3>
-                        <p class="card-desc">あらかじめ登録したベーススケジュール（固定ブロック・可変ブロック）に、今日の目標やルーチンを掛け合わせ、AIが最適なタイムスケジュールを生成します。</p>
+                        <p class="card-desc">あらかじめ登録したベーススケジュール（固定ブロック・可変ブロック）に、今日の目標を割り当ててタイムラインを生成。どのタスクを何時にやるかまで、AIが決めてくれます。</p>
                     </div>
                     <div class="card-visual-sm">
-                        <img src="assets/lp_schedule.png" alt="スケジュール画面">
+                        <img src="assets/shot_schedule.png" alt="AIが生成した1日のタイムライン">
                     </div>
                 </div>
 
@@ -204,11 +220,11 @@
                     <div class="card-glow"></div>
                     <div class="card-content">
                         <div class="card-icon">🔁</div>
-                        <h3>ルーチンの達成率を見える化</h3>
-                        <p class="card-desc">毎日・曜日指定・n日間隔で習慣を登録。日別の達成率グラフとルーチン別ランキングで、続いている習慣・サボりがちな習慣が一目でわかります。</p>
+                        <h3>習慣は、チェックするだけ</h3>
+                        <p class="card-desc">毎日・曜日指定・n日間隔で習慣を登録。あとは丸をタップするだけで「今日の達成」がその場で埋まります。積み上がった記録は達成率としても振り返れます。</p>
                     </div>
                     <div class="card-visual-sm">
-                        <img src="assets/lp_routine.png" alt="ルーチン画面">
+                        <img src="assets/shot_routine.png" alt="ルーチン画面 — 今日の達成 2/3">
                     </div>
                 </div>
 
@@ -291,49 +307,56 @@
 
             <div class="gallery-track" id="gallery-track">
                 <div class="gallery-item reveal reveal-delay-1">
-                    <img src="assets/lp_record.png" alt="記録タブ" loading="lazy">
+                    <img src="assets/shot_record.png" alt="記録タブ" loading="lazy">
                     <div class="gallery-caption">
                         <h4>📝 記録</h4>
                         <p>日記・目標・感謝を毎日記録</p>
                     </div>
                 </div>
                 <div class="gallery-item reveal reveal-delay-2">
-                    <img src="assets/dump_mode.jpg" alt="ダンプモード" loading="lazy">
+                    <img src="assets/shot_dump.png" alt="ダンプモード" loading="lazy">
                     <div class="gallery-caption">
                         <h4>🧠 ダンプモード</h4>
                         <p>思考をそのまま吐き出す</p>
                     </div>
                 </div>
                 <div class="gallery-item reveal reveal-delay-3">
-                    <img src="assets/lp_schedule.png" alt="スケジュール" loading="lazy">
+                    <img src="assets/shot_sequence.png" alt="今日の稼働シーケンス" loading="lazy">
+                    <div class="gallery-caption">
+                        <h4>🎯 稼働シーケンス</h4>
+                        <p>朝→夜の順に並んだ今日の動線</p>
+                    </div>
+                </div>
+                <div class="gallery-item reveal reveal-delay-3">
+                    <img src="assets/shot_schedule.png" alt="スケジュール" loading="lazy">
                     <div class="gallery-caption">
                         <h4>📅 予定</h4>
                         <p>AIがスケジュールを自動生成</p>
                     </div>
                 </div>
                 <div class="gallery-item reveal reveal-delay-4">
-                    <img src="assets/lp_todo.png" alt="ToDo" loading="lazy">
+                    <img src="assets/shot_todo.png" alt="ToDo" loading="lazy">
                     <div class="gallery-caption">
                         <h4>✅ ToDo</h4>
-                        <p>タスクを一覧管理</p>
+                        <p>AIが抽出したタスクを一覧管理</p>
                     </div>
                 </div>
                 <div class="gallery-item reveal reveal-delay-5">
-                    <img src="assets/lp_routine.png" alt="ルーチン" loading="lazy">
+                    <img src="assets/shot_routine.png" alt="ルーチン" loading="lazy">
                     <div class="gallery-caption">
                         <h4>🔁 ルーチン</h4>
-                        <p>習慣の達成率を可視化</p>
+                        <p>チェックするだけで習慣が積み上がる</p>
                     </div>
                 </div>
                 <div class="gallery-item reveal reveal-delay-5">
-                    <img src="assets/lp_ai.png" alt="AIチャット" loading="lazy">
+                    <img src="assets/shot_ai_chat.png" alt="AIチャット" loading="lazy">
                     <div class="gallery-caption">
                         <h4>🤖 AIチャット</h4>
                         <p>日記のフィードバックと分析</p>
                     </div>
                 </div>
                 <div class="gallery-item reveal reveal-delay-5">
-                    <img src="assets/lp_settings.png" alt="設定画面" loading="lazy">
+                    <img src="assets/shot_settings.png" alt="設定画面" loading="lazy">
                     <div class="gallery-caption">
                         <h4>⚙️ 設定</h4>
                         <p>AI接続・人格切替・表示カスタマイズ</p>

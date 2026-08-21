@@ -308,7 +308,10 @@ BYOK方式から**「EvJou AI（開発者のローカルLLMプロキシ）」を
 > **【2026-07 訂正】通信方式は Firestore 経由が正。** 本章には当初 HTTP 直叩き＋Cloudflare Tunnel
 > 案の記述が混ざっていたが、実装・運用ともに **Firestore の `ai_requests` コレクション経由**
 > （アプリが `addDoc` → ワーカーが `onSnapshot` で消化 → 結果を同ドキュメントに書き戻し）で確定。
-> `PROXY_BASE_URL` / Cloudflare Tunnel は**不使用**。詳細は `.agents/AGENTS.md` §1 を正とすること。
+> `PROXY_BASE_URL` / Cloudflare Tunnel は**不使用**。詳細は `docs/operations.md` §1 を正とすること
+> （2026-08-21 まではこの参照先が `.agents/AGENTS.md` §1 だったが、同ファイルは
+> Antigravity の入口へ作り替えられ、内容は `docs/operations.md` と
+> `.agents/PROJECT_RULES.md` §7 へ移した）。
 
 ### 3モード構成（確定）
 - **`mode: "proxy"`（🤖 EvJou AI）** … デフォルト。ゼロコンフィグ。Firebase匿名ログイン後、Firestore `ai_requests` へリクエスト文書を作成し、ワーカーの書き戻しを `onSnapshot` で待つ（タイムアウト2分）。
@@ -362,7 +365,10 @@ BYOK方式から**「EvJou AI（開発者のローカルLLMプロキシ）」を
      `addRoutinesDirect(texts)` に変更し、1回の更新にまとめた（バッチ内重複・上限も判定）。
    - `useJournal` の未使用引数 `addExtractedTodos` を削除（承認は App 側の責務に移行済み）。
    - 提案リストの更新を関数アップデータ化。
-2. **Dynamic Journal Fields**（バックログ消化）… 詳細は `.agents/AGENTS.md` §4。
+2. **Dynamic Journal Fields**（バックログ消化）… コアフィールドの制約は
+   `.agents/PROJECT_RULES.md` §7、仕様は `docs/app-specification.md`。
+   （旧参照先の `.agents/AGENTS.md` §4 は 2026-08-21 に役割を変更。
+   当時の記述は `git show 52e4ec5:.agents/AGENTS.md` で読める）
 3. **ドキュメントの矛盾解消** … §12 の Cloudflare Tunnel 記述に Firestore 正の訂正を追記。
 
 ### 設計上の判断（次に触る人が壊しやすい順）
@@ -386,7 +392,9 @@ BYOK方式から**「EvJou AI（開発者のローカルLLMプロキシ）」を
 
 ⚠️ **キューは既に実装済み。作り直さないこと。** `p-queue`（`concurrency: 1` で直列＝GPU OOM回避）、
 `processing` マーク、Ollama の5回リトライ＋`waiting_for_server` まで入っている。
-残作業は**穴を塞ぐこと**で、具体的な指摘は `.agents/AGENTS.md` §4 に列挙した。要点：
+残作業は**穴を塞ぐこと**で、具体的な指摘は当時 `.agents/AGENTS.md` §4 に列挙した
+（同ファイルは 2026-08-21 に Antigravity の入口へ作り替え。当時の記述は
+`git show 52e4ec5:.agents/AGENTS.md` で読める。**未解決分は `.agents/STATE.md` §3 に転記済み**）。要点：
 - **最重要：クライアント2分タイムアウトとキュー滞留の衝突。** `api/client.js` の `callProxy` は
   120秒で reject する。直列処理＋リトライ（待機だけで最大20秒超）だと数件詰まっただけで超える。
 - **`processing` のまま孤児化した文書が復帰しない**（監視クエリが `status == 'pending'` のため）。

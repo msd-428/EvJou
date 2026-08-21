@@ -1,75 +1,75 @@
-# EvJou Project Rules & Context
+# .agents/AGENTS.md — Antigravity の入口
 
-This file contains the core context and architectural decisions for the EvJou project.
-All agents working on this workspace must adhere to these rules and understand this context.
+> ⚠️ **このファイルは `.agents/AGENTS.md`（Antigravity＝IDE側エージェント向け）です。**
+> リポジトリルートの `AGENTS.md`（Codex 向け）とは**別のファイル**です。
+> 名前が同じなので取り違えないでください。
+>
+> なお、このファイルには以前**プロジェクトルール本体**が書かれていました。
+> その内容は [PROJECT_RULES.md](PROJECT_RULES.md) と [STATE.md](STATE.md) へ移してあります。
 
-## 1. Architecture (Local LLM Proxy via Firestore)
-- **Frontend App**: Built with React, Vite, and Capacitor (`@capacitor/preferences` for local storage).
-- **Backend (Proxy Worker)**: A Node.js worker (`proxy/index.js`) running locally on the developer's PC.
-- **Communication Flow**: 
-  1. The app writes an AI request document to the `ai_requests` collection in Firestore with `status: 'pending'`.
-  2. The local Node.js proxy worker listens for new pending documents using `onSnapshot`.
-  3. The proxy calls the local Ollama instance (`qwen2.5:7b`).
-  4. The proxy updates the Firestore document with the result and `status: 'completed'`.
-- **Why this architecture?**: To securely expose the local LLM to the mobile app without opening ports (NAT traversal via Firestore), ensuring zero API costs and maximum privacy.
+このファイルは **Antigravity が読む入口**です。**役割差分だけを書きます。**
 
-## 2. Rate Limiting / Queueing Strategy
-- Do NOT merge multiple AI tasks (e.g., text summarization and ToDo extraction) into a single prompt just to save requests. Splitting tasks yields higher quality results.
-- Because the LLM runs locally (zero API cost), we do not need strict hard limits (like 3/day).
-- Instead, implement a "Queueing / Waiting" mechanism in the proxy worker to handle high load or server downtime gracefully without dropping requests.
+## 最初に読む順番
 
-## 3. Frontend Build Targets & Devices
-- **Testing Devices**:
-  - **Mi 10 Pro**: Newer Android device, supports modern WebViews.
-  - **OPPO Reno A (ColorOS)**: Older Android device (approx. Android 9, Chrome 74 WebView).
-- **Vite Configuration**: Always ensure `vite.config.js` has `build: { target: ['es2015', 'chrome74'] }` to automatically transpile modern JavaScript (like Optional Chaining `?.` and Nullish Coalescing `??`) so it doesn't crash on older WebViews.
+1. **[PROJECT_RULES.md](PROJECT_RULES.md)** — 全エージェント共通の正典。
+   役割憲章・引き継ぎ・ビルドとテスト・**環境の罠（実機の鉄則もここ）**・事故台帳・文書マップ
+2. **[STATE.md](STATE.md)** — 今どこにいるか。**外部環境の状態は §6**
+3. [../docs/operations.md](../docs/operations.md) — 運用マニュアル。
+   ワーカーの起動手順・疎通確認・トラブルシューティング。**外部環境を触る前に読むこと**
 
-> **Note**: `HANDOFF.md` §12 previously described an HTTP + Cloudflare Tunnel proxy. That was an
-> earlier design sketch and is **not** what ships. This section (Firestore `ai_requests`) is correct;
-> `HANDOFF.md` has been annotated accordingly.
+## 役割
 
-## 4. Current Backlog / Next Steps
-- **[Completed] Dump Mode ToDo Approval**: Instead of automatically adding extracted ToDos, present them to the user for selection/approval.
-- **[Completed] Routine Option**: Allow saving extracted tasks as "Routines" rather than just one-off "ToDos".
-- **[Completed] Dynamic Journal Fields**: Journal sections are now user-editable (add / rename / reorder / remove) via `settings.journalFields`.
-  - `todayGoal` / `tomorrowGoal` are **core fields** (`CORE_FIELD_KEYS`): renameable and reorderable but not removable, because ToDo extraction, schedule generation and AI chat context read them by key.
-  - Removing a field never deletes stored entry data — restoring the field brings past records back into view.
-  - The legacy `settings.hiddenFields` shape is migrated automatically in `normalizeJournalFields()`.
-- **[Completed] Proxy Worker Queueing System** — gaps closed 2026-07-29. See `HANDOFF.md` §14.
-  Contract in one line: the worker **acknowledges** a request (`pending` → `queued` + `queuePosition`)
-  the moment it sees it, and re-writes `queuePosition` every time a job drains, so a live worker
-  always keeps the document moving. The client therefore measures **silence, not elapsed time**:
-  60s with no acknowledgement = worker down; 180s with no document update after acknowledgement =
-  stalled; 600s absolute cap. Do not "simplify" this back into a single fixed timeout — that is the
-  bug this replaced.
-  - ⚠️ **Requires a Firestore rules change that is not yet applied** — see `HANDOFF.md` §14.
-  - ⚠️ **A second worker running old code was observed consuming the same collection** from a machine
-    outside this repo. `claimRequest()` now makes double-processing harmless, but the stray worker
-    still needs to be found and stopped.
+**実機QA・実機検証・外部環境の運用・観測の記録が主担当です。**
+加えて、軽い相談・進捗の確認・次のプロンプトの起草補助も引き受けます。
 
-<details>
-<summary>元の課題メモ（対応済み・記録として残す）</summary>
+このプロジェクトの既定の担当は Claude Code で、3役すべてを兼ねています
+（`PROJECT_RULES.md` §1）。**あなたが開かれているのは、あえてあなたに任された作業が
+あるからです。** 何を任されたのかが指示書から読み取れないときは、着手せず確認してください。
 
-  ⚠️ **the queue already exists; do NOT rewrite it from scratch.**
-  `proxy/index.js` already uses `p-queue` (`concurrency: 1`, serial execution to avoid GPU OOM),
-  marks `status: 'processing'` when a slot frees, and retries Ollama up to 5 times with a
-  `waiting_for_server` status between attempts. The remaining work is **closing the gaps**, notably:
-  - **Client timeout vs. queue depth**: `callProxy` in `src/api/client.js` rejects after **120s**.
-    Serial processing plus retries (up to ~20s of sleeps alone) blows past that with only a few
-    queued requests. The queue and the timeout must be reconciled — this is the top issue.
-  - **Orphaned `processing` docs**: the listener queries `status == 'pending'`, so a request left in
-    `processing` by a worker crash is never retried and just hangs until the client times out.
-  - **UTC date bug**: `checkAndIncrementUsage()` uses `new Date().toISOString().split('T')[0]`,
-    which violates the project's timezone rule (local date only) — the daily counter rolls over at
-    09:00 JST, not midnight.
-  - **No limit is actually enforced**: `checkAndIncrementUsage` only counts up and never rejects, so
-    the `"無料利用枠"` branch in the error handler is dead code. `remaining` is a count-up, not a
-    remaining count, despite the field name.
-  - **`ai_requests` is never cleaned up** — completed documents accumulate indefinitely.
+## 本体コードを変更しない
 
-## 5. Strict LP & Screenshot Rules
-- **NEVER MODIFY THE APP SOURCE CODE (src/ directory) FOR TEMPORARY SCREENSHOTS OR HACKS.** 
-  The app is being actively developed in another thread. Modifying app code (e.g., `daily-journal.jsx`) for automated screenshot tricks will cause severe merge conflicts and anger the developers. 
-  If you need specific states for screenshots, you must instruct the user to manually paste data or manually navigate to the screen.
+**`src/` と `proxy/index.js` を変更しません。**
+作ってよいのは `src/` の外に置く検証用スクリプトだけです。
 
-</details>
+**検証を通すための本体コードの変更（テスト用バイパス・ログ追加・しきい値の緩和）は、
+どんなに軽微でも行わないでください。** 足りないものは「何が足りないか」を実装担当（Codex）へ
+報告します。
+
+**スクリーンショット撮影のために `src/` を書き換えるのも同じく禁止です。**
+アプリは別ブランチで開発が進んでおり、撮影用の細工はマージ衝突を起こします。
+特定の画面状態が要るなら、ユーザーに手で入力・遷移してもらってください。
+
+**★ 例外はこの入口では定義しません。** 例外があるとすれば
+[PROJECT_RULES.md](PROJECT_RULES.md) §1 の Antigravity の節にあります。
+**チャットだけの許可では発効しません。**
+
+## 実機作業で必ず守ること
+
+詳細な鉄則は `PROJECT_RULES.md` §6 にあります。**着手前に必ず読んでください。**
+特に次の1点は、**このプロジェクトで実際にデータ全消失事故を起こしている**項目です。
+
+> **タップの前に必ず `screencap` と `dumpsys window | grep mCurrentFocus` で対象を確認する。**
+
+判定の原則:
+
+1. **判定は「実際に動かして観測した事実」に基づく。**
+   実操作では作れない状態を直接注入で作った場合は、注入した旨を必ず明記する
+   （注入値そのものは実挙動の証拠になりません）。
+   **未実施を推測で PASS と書かない。「未実施」と書けば十分です**
+2. **想定と違う結果が出たら、観測したとおりに報告する。**
+   期待に合わせて手順や判定基準を書き換えない。事実と推定は分けて書く
+3. **端末とビルドの同一性を最初に固定する。** どのコミットをビルドして入れ、
+   どの端末で実施したかを結果に含める。**全 adb コマンドに `-s <シリアル>` を付ける**
+   （端末一覧は `STATE.md` §6）
+4. **端末側の既知の制約は「回避策の発明」ではなく「報告」で扱う。**
+   前提が揃わないなら、判定基準を緩めず報告して指示を仰ぐ
+
+## 引き継ぎ
+
+チャットの文脈は他のエージェントと共有されません。
+**セッションを始めたら `STATE.md` を読み、区切りがついたら更新してください。**
+更新の作法は `PROJECT_RULES.md` §2 —— **追記で更新し、既存のブロックを置換しない。
+「未検証」「未実施」を進捗の書き換えで消さない。**
+
+> あなたの出力のうち壁打ちや要約は参考情報であり、**判断の根拠にはなりません**。
+> 進捗の正は `STATE.md` と、進行管理（Claude Code）の検証を通った報告です。

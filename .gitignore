@@ -14,3 +14,9 @@ proxy/serviceAccountKey.json
 android/app/*.keystore
 android/app/*.jks
 android/keystore.properties
+
+# スクショ自動撮影まわりの作業用スクラッチ。成果物はコミットするが道具は追跡しない。
+# 中身は退避ブランチ wip/lp-scratch-20260730 に保全してある。
+scratch_cdp/
+ui.json
+window_dump.xml

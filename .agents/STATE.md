@@ -277,7 +277,9 @@ PASS  legacy migration
   内容はユーザー確認済み。マージすると主幹に `AGENTS.md` が入ります
   （主幹に未追跡で存在した旧 `AGENTS.md` は退避ブランチへ保全済みで、現在は主幹に存在しません）
 - **`origin` への push が未実施**（主幹は origin より5コミット先）。**判断待ち**
-- **プロキシワーカーの起動**（現在停止中・§6）。手順は `docs/operations.md` §2③
+- ~~**プロキシワーカーの起動**（現在停止中・§6）~~ → **2026-08-23 起動済み（§6）。**
+  次は **D（AIの傾向・目標分析・チャットの Markdown 実機描画）の確認**。
+  OPPO Reno A で AI を1回叩いてもらう。**未実施・Antigravity へ発注する**
 - 上記以外は **未発注**です。§3 の未解決問題はどれも**まだ誰にも渡していません**。
   「報告待ち」ではなく「発注していない」状態であることに注意してください
   （例外: `DAILY_LIMIT` の文書修正は別セッションへ発注済み・進行中）
@@ -294,7 +296,7 @@ PASS  legacy migration
 | 実機 OPPO Reno A（`1d05e7bc` / `CPH1983` / ColorOS） | **接続中**。旧WebView（Chrome 74 相当）の互換確認用。`vite.config.js` の `chrome74` ターゲットはこの端末向け |
 | 実機 Samsung `SCG13`（`R5CT43R8P0D` / Galaxy S22・au） | **接続中。EvJou とは無関係の可能性が高い。触らないこと** |
 | Ollama（`localhost:11434`） | **稼働中。** `qwen2.5:7b`（ワーカー既定モデル）・`bge-m3:latest`・`gemma4:e4b-it-qat` を保持 |
-| プロキシワーカー（`proxy/index.js`・自宅PC） | **停止中。** `proxy/index.js` を実行している node プロセスは見つからなかった。**AI機能は現在スマホから使えない状態**。起動手順は `docs/operations.md` §2③ |
+| プロキシワーカー（`proxy/index.js`・自宅PC） | ~~**停止中**（2026-08-21 実測）~~ → **2026-08-23 05:5x に Claude Code が起動。稼働中。** 手順書 §2② で二重起動が無いことを確認してから §2③ のとおり `node index.js`。出力は `✅ Firebase Admin SDK initialized.` / `🧹 古いリクエストを削除: 8件` / `👀 Firestore ai_requests コレクションの監視を開始します...`。**★ Claude Code のセッションの子プロセスとして起動しているので、セッションが終わると落ちる可能性があります。**恒久的に動かすなら、専用ターミナルで `docs/operations.md` §2③ のとおり起動し直すこと |
 | Firestore（`evjou-efd9b`） | **未確認**（Console へのログインが要るため）。§3 のルール未適用と野良ワーカーの件が未解決 |
 
 > ⚠️ **adb に3台が同時接続されています。`-s <シリアル>` を必ず付けてください。**

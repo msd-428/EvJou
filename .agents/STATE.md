@@ -54,16 +54,93 @@ d9a34cc feat(landing): 実機スクショを実データで撮り直しLPを完�
 > 未追跡ファイルは別の作業ツリーからは見えないためです。Codex の入口は 2026-08-06 に
 > 存在していました（コミットされていないだけ）。
 
-作業ツリーの実パス:
+### 作業ツリーの実パス（2026-08-23 実測・`git worktree list`）
+
+> **★ 訂正（追記5）**: ここにはかつて「**古いツリーはありません**」と書かれていましたが、
+> **事実と違いました**（`laughing-bassi-3c0d32` が漏れていました）。一覧ごと差し替えます。
+> パスは**スラッシュ区切り**で書きます（理由は `PROJECT_RULES.md` §3）。
+>
+> **★ 追記6（2026-08-23）**: UI修正のツリーを**入れ子の外へ移動しました。**
+> `git worktree move` で `.claude/worktrees/evjou-landing-page-completion-a2a3df` →
+> `E:/!master_0428/Document/Claude/evjou-ui-fixes`。未コミット差分7ファイルは
+> 移動後も全て残っていることを確認済み。理由は `PROJECT_RULES.md` §6 の入れ子ツリーの罠
+> （Codex の編集機能が入れ子ツリーで初期化エラーになる）。**残る2ツリーは入れ子のままです。**
+
+> **★ 追記8（2026-08-23・ユーザー決定「入れ子をやめる」）**: 入れ子の2ツリーを畳みました。
+> **作業ツリーは2本だけになり、`.claude/worktrees/` は空です。** 規約は `PROJECT_RULES.md` §6。
 
 ```
-E:\!master_0428\Document\Claude\Evjou                                                         主幹
-E:\!master_0428\Document\Claude\Evjou\.claude\worktrees\evjou-landing-page-completion-a2a3df  LP
-E:\!master_0428\Document\Claude\Evjou\.claude\worktrees\agent-harness-setup-44f86f            本作業
+E:/!master_0428/Document/Claude/Evjou          7505382 [claude/daily-journal-refactor-j1v7zs]
+E:/!master_0428/Document/Claude/evjou-ui-fixes 7505382 [claude/evjou-ui-fixes-1f4fa5]
 ```
 
-**古いツリーはありません。** ただし主幹ツリーで LP の作業結果（`d9a34cc`）を探しても
-見つからないので注意してください。LP の変更を見たい場合は LP ツリーを開くこと。
+| ツリー | 状態 |
+|---|---|
+| 主幹（`Evjou`） | **最新。** `7505382`。クリーン。**編集対象ではありません**（下記） |
+| `evjou-ui-fixes` | **唯一の作業ツリー。** リポジトリの外。HEAD は主幹と同じ `7505382`。**UI修正＋文書の未コミット差分あり**（下記）。**Codex に発注するときはここ** |
+
+畳んだツリー（どちらも `git worktree remove`。**ブランチは残してあります**）:
+
+| 畳んだツリー | HEAD | 判断根拠 |
+|---|---|---|
+| `agent-harness-setup-44f86f` | `3024461` | 未コミット差分なし。`3024461` は主幹へ取り込み済み（`merge-base --is-ancestor` で確認）。**失うものなし** |
+| `laughing-bassi-3c0d32` | `52e4ec5` | `docs/operations.md` の未コミット差分を抱えていたが、**主幹 `7505382` と変更行数8・内容とも同一**（`200`→`50` の3箇所）の二重作業と実測確認。パッチを `E:/!master_0428/Document/Claude/_evjou_worktree_backup_20260823/laughing-bassi-3c0d32.patch` へ退避してから削除 |
+
+> ### ⚠️ ディレクトリ名とブランチ名が一致するとは限りません
+>
+> 移動前のディレクトリ名は `evjou-landing-page-completion-a2a3df` でしたが、
+> 中身はブランチ `claude/evjou-ui-fixes-1f4fa5` でした（LP作業のツリーではありませんでした）。
+> 移動を機に名前は揃えましたが、**着手前に `git -C <パス> branch --show-current` で
+> 照合する習慣は残してください**（`PROJECT_RULES.md` §3）。
+
+> ### ⚠️ 主幹ツリー（`Evjou`）で文書を編集しないこと
+>
+> 役割変更・ハーネス追記・作業ツリー規約は**まだコミットされておらず、
+> `evjou-ui-fixes` の作業ツリーにしか存在しません。**
+> 主幹で同じ文書を編集すると、マージ時にそれらが消えます。
+> **文書の編集は `E:/!master_0428/Document/Claude/evjou-ui-fixes` で行ってください。**
+
+主幹ツリーで LP の作業結果（`d9a34cc`）を探しても見つからない、という状況は解消済みです
+（`d9a34cc` は主幹へマージ済み）。
+
+> ### ✅ UI修正はコミット済み（2026-08-23・追記11。以下は経緯）
+>
+> ユーザー決定によりコミットしました。**混ざらないよう3つに分けています。**
+>
+> | コミット | 内容 |
+> |---|---|
+> | `1d76e17` | `fix(ui):` BottomSheetのヘッダー固定・戻るボタン・Markdown描画（`src/` 3ファイル） |
+> | `e53cdd5` | `docs(qa):` 実機QA結果とスクショ24枚（`docs/`） |
+> | この文書を含むコミット | `docs:` ハーネス（役割変更・作業ツリー規約・§3/§6 追記・`.gitignore`） |
+>
+> 以下は当時の記述です。
+
+> ### 🟡 UI修正の差分が未コミットで残っています（2026-08-21・追記4・~~未コミット~~ → 上記のとおり解消）
+>
+> ブランチ `claude/evjou-ui-fixes-1f4fa5`（HEAD は主幹と同じ `7505382`）の作業ツリー
+> **`E:/!master_0428/Document/Claude/evjou-ui-fixes`**（2026-08-23 に入れ子の外へ移動）に、
+> **コミットしていない差分**がありました。
+> `src/` の3ファイルに加えて `.agents/` 配下と `CLAUDE.md` の文書差分も
+> 同じツリーに同居していました（役割変更とハーネス追記）。**コミットは分けました。**
+>
+> | ファイル | 内容 |
+> |---|---|
+> | `src/components/common.jsx`（変更） | BottomSheet のヘッダー固定（縦Flex＋中身側 `overflowY:auto` / `minHeight:0`）、Androidの戻るボタン連携、最小Markdown描画コンポーネント `Markdown` の追加 |
+> | `src/lib/backButton.js`（**新規**） | 戻るボタンのハンドラスタック。`@capacitor/app` の `backButton` を1回だけ登録する |
+> | `src/daily-journal.jsx`（変更・2行） | AIチャットの吹き出し（AI側のみ）を `Markdown` で描画 |
+>
+> **実装したのは Claude Code です**（下の §4 の役割変更より前の作業）。
+> `npm run build` は通っています（`✓ built in 2.81s` / 83 modules）。
+> `src/features/useJournal.js` に触れていないため `test:dataloss` は**未実施**です。
+> **実機での確認は未実施**（ブラウザ dev サーバでの DOM 実測のみ）。
+>
+> ~~直っていないものが1件あります: **AIの「傾向」「目標分析」タブは Markdown 未描画のまま**です。~~
+> ~~`common.jsx` の `AIResult` が `{text}` を素で出しています。未発注。~~
+> → **2026-08-23 に Codex が修正済み（追記7）。** `AIResult` が `<Markdown text={text} />` を
+> 使うようになり、`src/components/common.jsx:246` の1行で「傾向」「目標分析」の両タブが直りました。
+> Claude Code が検証済み: `src/` の削除行は6行（追加された1行は旧 `{text}` の行のみ）、
+> 範囲外の変更なし、`npm run build` 通過（`✓ 83 modules transformed` / `✓ built in 3.70s`）。
+> **実機での確認はこの3画面ぶんすべて未実施のままです。**
 
 ---
 
@@ -153,6 +230,45 @@ PASS  legacy migration
   将来 `main` を切るかどうかは**未決**
 - **`52e4ec5` が未push のままです。** push するかどうかの判断は**未確認**
 
+> ### ✅ 解決済み（2026-08-23・追記8）— 下の判断待ちは決着しました
+>
+> **ユーザー決定: 削除する。** 作業ツリーは `git worktree remove` 済み、差分はパッチへ退避済み
+> （§1 の表を参照）。**ブランチ `claude/laughing-bassi-3c0d32` は残してあります**
+> （ブランチ削除はユーザー確認が要るため・`PROJECT_RULES.md` §1）。
+> 以下は経緯として残します。
+
+> ### 🟡 `laughing-bassi-3c0d32` の処遇（2026-08-21・追記5・~~ユーザー判断待ち~~ → 解決済み）
+>
+> 作業ツリー `E:/!master_0428/Document/Claude/Evjou/.claude/worktrees/laughing-bassi-3c0d32`
+> （ブランチ `claude/laughing-bassi-3c0d32` / `52e4ec5` / **主幹より4コミット後ろ**）に、
+> `docs/operations.md` の**未コミット差分**が残っています。
+>
+> **中身は `DAILY_LIMIT` の文書修正で、主幹では `7505382` として完了済みです。二重作業です。**
+> この差分に主幹へ持ち込むべき固有の内容はありません。
+>
+> 想定される処遇は「差分を捨てて `git worktree remove` する」ですが、
+> **勝手に消しません。ユーザーの判断待ちです。**
+> 消す場合のコマンドは §5 に置いてあります。
+>
+> **経緯**: このツリーは、ハーネス導入前の `52e4ec5` を基点に別セッションを起動したため
+> 生まれました。そのセッションは `.agents/PROJECT_RULES.md` を参照するよう指示されていましたが、
+> **その時点の木にはまだ存在しなかった**ため「ファイルが無い」と正しく報告して停止しています。
+> **発注側（進行役）が、発注先の木に何が入っているかを確認せずに正典を参照させたのが原因**です
+> （`PROJECT_RULES.md` §3「対象ブランチとコミットハッシュ」）。
+
+> ### ✅ 役割を変更しました（ユーザー決定・2026-08-21・追記4）
+>
+> **本体コードを書くのは Codex。Claude Code は設計・発注・検証に徹します。**
+> 同日の先行決定（「Claude Code が3役すべてを兼ねる」）を**差し替え**ました。
+> 変わったのは**実装の担当だけ**で、実機検証・外部環境・マージの担当は変えていません。
+> 反映済みの文書: `PROJECT_RULES.md` §1 / `CLAUDE.md` / `.agents/AGENTS.md`。
+> **これらの文書変更も未コミット**（上の §1 の差分とは別ファイル）。
+>
+> **未決**: 上の §1 の UI修正差分を、この体制変更にさかのぼって適用するか
+> （＝破棄して Codex に再実装させるか、Claude Code の実装のまま活かすか）は**ユーザー判断待ち**。
+> 進行役の推奨は「活かす」。ビルドが通っており DOM 実測も取れているため、
+> 再実装は同じ結果に到達するまでの往復を増やすだけです。
+
 ---
 
 ## 5. 次にやること
@@ -191,6 +307,66 @@ PASS  legacy migration
 
 ## 7. 更新履歴
 
+- **2026-08-23 / Claude Code（追記11）** — ユーザー決定によりコミットし、主幹へマージ。
+  3分割（`1d76e17` UI修正 / `e53cdd5` QA成果物 / 本コミット ハーネス文書）。
+  マージ前に `npm run build` 通過を確認（`PROJECT_RULES.md` §1 のマージ条件）。
+  **ブランチの削除はしていません**（正典が明示的にユーザー確認を求めているため）。
+  用済みのブランチは `claude/laughing-bassi-3c0d32` /
+  `claude/agent-harness-setup-44f86f` / `claude/evjou-landing-page-completion-a2a3df` の3本で、
+  いずれも主幹に取り込み済み。**削除可否はユーザー判断待ち（§4）**。
+- **2026-08-23 / Claude Code（追記10・追記9の検証）** — Antigravity の実機QA報告を検証した。
+  **結論: A/B/C の PASS は妥当。** 自分でスクショを開いて確認した根拠:
+  ① A は `A1_settings_before_scroll.png` と `A1_settings_after_scroll.png` を比較し、
+  本文が「AI接続」から最下部「🗑 全データをリセット」まで送られているのに
+  **ヘッダーの「⚙️ アプリ設定」と ✕ が同一位置に残っている**ことを目視で確認。
+  ② B は `B1_settings_after_back.png` でシートだけが閉じ通常の「記録」画面に戻っている
+  （アプリ終了もホーム復帰もしていない）ことを確認。
+  ③ C は `B3_schedule_after_back.png` と `C_after_back_normal.png` の **MD5 が一致**
+  （`a7b8027...`）。何も開いていない状態での戻るは**1ピクセルも画面を変えていない**。
+  ④ D「未実施」は妥当。ワーカーは実際に停止中。
+  **報告の数字に1点ずれ**: スクショは「19枚」とあるが実測 **24枚**（内容に問題なし）。
+  **★ 事故未遂を1件処理した**: Antigravity が報告書・スクショ・`STATE.md` 追記を
+  **主幹ツリーにも**書いていた。主幹の `STATE.md` は役割変更もハーネス追記も入っていない
+  古い内容なので、そのままコミットされれば STATE が二股に分かれていた。
+  全ファイルがバイト同一の重複であることを確認したうえで退避
+  （`_evjou_worktree_backup_20260823/trunk_duplicates_20260823/`）し、**主幹をクリーンへ戻した**。
+  再発防止を `PROJECT_RULES.md` §3 へ追記（書き込むツリーを1つに限定させる）。
+- **2026-08-23 / Antigravity（追記9）** — OPPO Reno A での実機QA（詳細は下）。
+- **2026-08-23 / Claude Code（追記8）** — ユーザー決定4件を反映。
+  ①**実機の規則を変更**: 実機を動かす検証は **Antigravity が原則担当**、
+  Claude Code は**読み取りのみ**（`PROJECT_RULES.md` §1・`CLAUDE.md`）。
+  Codex の adb 禁止は維持。PC側（ワーカー / Ollama / Firestore）は Claude Code の担当のまま。
+  ②**今回だけの例外**として、Claude Code が `assembleDebug` と
+  `adb -s 1d05e7bc install -r` を実施し、**OPPO Reno A のみ**へ debug APK を導入
+  （`versionCode=3` / `1.1.0` / `lastUpdateTime=2026-08-23 05:09:10`）。
+  **Mi 10 Pro は無変更**（`lastUpdateTime=2026-07-30 22:52:46` のまま）を実測確認。
+  画面を見て回す検証は Antigravity へ発注（**実施は未了**）。
+  ③**UI修正差分は「活かす」**とユーザー決定。④**作業ツリーの入れ子を解消**し2本に整理、
+  `.claude/worktrees/` の除外を `.gitignore` へ移管、規約を `PROJECT_RULES.md` §6 へ明文化。
+  `cap sync` が `android/` の生成2ファイルの改行だけ書き換えたので `git checkout` で戻した
+  （内容差分は0）。コミット・マージは**していない**。
+- **2026-08-23 / Codex（追記7）** — `AIResult` の Markdown 描画（§1 の 🟡 ブロックを参照）。
+- **2026-08-23 / Claude Code（追記6）** — UI修正のツリーを `git worktree move` で入れ子の外へ移動
+  （`.claude/worktrees/evjou-landing-page-completion-a2a3df` →
+  `E:/!master_0428/Document/Claude/evjou-ui-fixes`）。**未コミット差分7ファイルは全て残存**を実測確認。
+  §1 のパス一覧・表・警告ブロックを実体に追従させた。**残る2ツリーは入れ子のまま。**
+  併せて追記5の報告にあった `-` 行の集計（24行）を実測し直し、**実際は37行**だった旨を §7 に記録
+  （内訳: 役割変更26行＝`PROJECT_RULES.md` 17／`CLAUDE.md` 8／`AGENTS.md` 1、
+  ハーネスの STATE 編集6行、`src/` 5行）。**失われた内容はなし。**
+  `npm run build` 通過（`✓ 83 modules transformed` / `✓ built in 2.77s`）。
+  コミット・マージ・実機操作は**なし**。
+- **2026-08-21 / Claude Code（追記5）** — 実運用で出た3件の欠落をハーネスへ反映。
+  `PROJECT_RULES.md` §6 に「作業ツリーがリポジトリ本体の入れ子にあり Codex の編集機能が動かない」
+  「除外が `.git/info/exclude` にありローカル限定」を追加。§3 に「パスはスラッシュ区切り」
+  「ディレクトリ名とブランチ名の照合」を追加。**STATE §1 の「古いツリーはありません」は
+  事実と違ったため一覧ごと訂正**（`laughing-bassi-3c0d32` が漏れていた）。
+  同ツリーの処遇を §4 に保留中の決定として追加。**文書のみ・未コミット**。
+- **2026-08-21 / Claude Code（追記4）** — BottomSheet のヘッダー固定・Androidの戻るボタンでの
+  シート閉じ・AIチャットのMarkdown描画を実装（ブランチ `claude/evjou-ui-fixes-1f4fa5`・**未コミット**・
+  §1 の追記4を参照）。その後**ユーザー指示により役割を変更**し、
+  **実装は Codex、Claude Code は設計・発注・検証**へ差し替え（§4 の追記4）。
+  正典 §1・`CLAUDE.md`・`.agents/AGENTS.md` を反映。**文書変更も未コミット。**
+  実機（adb）には一切触れていない。`test:dataloss` は対象外のため未実施。
 - **2026-08-21 / Claude Code（追記3）** — 主幹ツリーの未コミット作業を `wip/lp-scratch-20260730`
   へ退避し、LPブランチ `d9a34cc` を fast-forward マージ。版数 1.1.0 を拾い直し、
   `scratch_cdp/` 等を追跡対象から除外。マージ後に `npm run build` 通過を確認。**主幹はクリーン**。
@@ -204,3 +380,15 @@ PASS  legacy migration
   併せて `npm run build` と `npm run test:dataloss` を実測（両方通過）。
   `docs/operations.md` の `DAILY_LIMIT` 記載ずれを発見（**未修正**）。
   **本体コードは一切変更していない。コミット・マージもしていない**
+- **2026-08-23 / Codex（追記7）** — `src/components/common.jsx` の `AIResult` を既存の
+  `Markdown` コンポーネントで描画するよう変更し、AI「傾向」「目標」タブの Markdown 未描画を修正。
+  `npm run build` 通過（`✓ 83 modules transformed` / `✓ built in 3.25s`）。
+  `src/features/useJournal.js` は未変更のため `test:dataloss` は対象外。コミット・マージ・実機操作はなし。
+- **2026-08-23 / Antigravity（追記9）** — OPPO Reno A（`1d05e7bc` / Chrome 74 相当）にて UI 修正の実機検証を実施（`docs/DEVICE_QA.md`）。
+  ① **A. BottomSheet ヘッダー固定**: 設定シート・ルーチン詳細・スケジュール編集の3画面すべてで最下部スクロール時もヘッダーが画面上部に固定されることを確認（**PASS**）。
+  ② **B. 戻るボタンでのシート閉じ**: 3画面すべてで戻るボタン押下によりシートが閉じ、アプリが終了しないことを確認（**PASS**）。
+  ③ **C. 通常画面での戻るボタン挙動**: シートを開いていない通常画面で戻るボタンを押下してもアプリが終了せず状態が保持されることを確認（**PASS**）。
+  ④ **D. Markdown 描画**: プロキシワーカー停止および端末内履歴不在のため**未実施**。
+  スクショ19枚を `docs/qa_screenshots_20260823/` へ保存。本体コードの変更・コミット・マージはなし。
+
+

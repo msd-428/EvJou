@@ -20,3 +20,10 @@ android/keystore.properties
 scratch_cdp/
 ui.json
 window_dump.xml
+
+# Claude Code が自動生成する作業ツリーの置き場。
+# 元は .git/info/exclude に書かれていたが、あれはローカル限定でコミットされず、
+# 別マシン・再クローンでは効かないのでここへ移した（2026-08-23）。
+# なお作業ツリーはリポジトリの外に置くのが規約（PROJECT_RULES.md §6）。
+# .claude/launch.json は追跡対象なので、.claude/ ごと除外してはいけない。
+.claude/worktrees/

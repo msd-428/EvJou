@@ -21,7 +21,7 @@ import { useSchedule } from "./features/useSchedule.js";
 import { useSettings } from "./features/useSettings.js";
 import { useJournal } from "./features/useJournal.js";
 
-import { Btn, TabBar, SaveToast, BottomSheet, DateSelector, CollapseSection, SettingButton, Banner, AIResult, AiActionPanel, EmptyState } from "./components/common.jsx";
+import { Btn, TabBar, SaveToast, BottomSheet, DateSelector, CollapseSection, SettingButton, Banner, AIResult, AiActionPanel, EmptyState, Markdown } from "./components/common.jsx";
 import { ScheduleBlock, BaseScheduleEditor } from "./components/schedule.jsx";
 import { TodaySequence, GoalEditor } from "./components/journal.jsx";
 import { TodoListGrouped } from "./components/todo.jsx";
@@ -817,7 +817,7 @@ ${routineSummary}
                         borderRadius: isUser ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
                         background: isUser ? "#6c63ff" : "#f0eeff",
                         color: isUser ? "#fff" : "#333",
-                      }}>{m.content}</div>
+                      }}>{isUser ? m.content : <Markdown text={m.content} />}</div>
                     </div>
                   );
                 })}

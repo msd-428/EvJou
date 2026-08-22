@@ -1,5 +1,7 @@
+import { useEffect, useRef } from "react";
 import { COLORS } from "../constants.js";
 import { fmtDate } from "../lib/date.js";
+import { pushBackHandler } from "../lib/backButton.js";
 
 export function Btn({ children, onClick, disabled, variant = "primary", small, style }) {
   const base = {
@@ -86,14 +88,32 @@ export function EmptyState({ icon, text }) {
 export function BottomSheet({ title, onClose, children }) {
   // inset ショートハンドは Chrome 87+。旧WebView(Chrome 74)は無視して offset が
   // auto のままになり、オーバーレイが画面全体に広がらない。必ず longhand で書く。
+
+  // Androidの戻るボタンで閉じる。開いている間だけスタックへ積む。
+  // onClose は毎描画で新しい関数になるので、ref 経由で最新を呼ぶ
+  // （依存配列を空にして、積む順＝表示の重なり順を保つため）。
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => pushBackHandler(() => { if (closeRef.current) closeRef.current(); }), []);
+
+  // ヘッダーは固定し、スクロールするのは中身だけ。下までスクロールすると ✕ が
+  // 画面外へ消えていたのを直したもの。縦Flex＋中身の minHeight:0 で実現しており、
+  // Flexbox も min-height:0 も Chrome 74 で動く（position:sticky を使わないのは、
+  // 旧WebViewでスクロール中に描画が取り残されることがあるため）。
   return (
     <div style={{ position:"fixed", top:0, right:0, bottom:0, left:0, background:"rgba(0,0,0,.45)", zIndex:200, display:"flex", alignItems:"flex-end" }}>
-      <div style={{ background:"#fff", width:"100%", maxWidth:680, margin:"0 auto", borderRadius:"20px 20px 0 0", padding:20, maxHeight:"90vh", overflowY:"auto", boxSizing:"border-box" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
+      <div style={{
+        background:"#fff", width:"100%", maxWidth:680, margin:"0 auto",
+        borderRadius:"20px 20px 0 0", maxHeight:"90vh", boxSizing:"border-box",
+        display:"flex", flexDirection:"column", overflow:"hidden",
+      }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"20px 20px 18px", flexShrink:0 }}>
           <h2 style={{ margin:0, fontSize:17, color:"#3a3a3a" }}>{title}</h2>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:"#888" }}>✕</button>
         </div>
-        {children}
+        <div style={{ padding:"0 20px 20px", overflowY:"auto", minHeight:0 }}>
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -173,12 +193,57 @@ export function Banner({ type, children }) {
   );
 }
 
+// AIの返答に混ざる最小限のMarkdownだけを描画する。ライブラリは足さない。
+// 対応するのは **太字** / `コード` / 行頭の見出し(#) の3つだけで、
+// 表・リンク・引用は素のテキストのまま出す（誤変換で本文を壊す方が損なので、
+// 解釈できない書式は触らない）。
+//
+// HTML文字列を組み立てず React要素として返すので、dangerouslySetInnerHTML は不要。
+// AIの出力がそのままDOMへ流れ込むことはない。
+// 改行は親の whiteSpace:"pre-wrap" に任せる（行を \n で繋いだまま返す）。
+const MD_INLINE = /(\*\*[^*\n]+\*\*|`[^`\n]+`)/;
+const codeStyle = {
+  background:"rgba(0,0,0,.06)", borderRadius:4, padding:"1px 5px",
+  fontFamily:"monospace", fontSize:"0.92em",
+};
+
+function mdInline(line, row) {
+  return line.split(MD_INLINE).map((part, i) => {
+    if (!part) return null;
+    if (part.length > 4 && part.slice(0, 2) === "**" && part.slice(-2) === "**") {
+      return <strong key={`${row}-${i}`}>{part.slice(2, -2)}</strong>;
+    }
+    if (part.length > 2 && part[0] === "`" && part[part.length - 1] === "`") {
+      return <code key={`${row}-${i}`} style={codeStyle}>{part.slice(1, -1)}</code>;
+    }
+    return part;
+  });
+}
+
+export function Markdown({ text }) {
+  const lines = String(text == null ? "" : text).split("\n");
+  return (
+    <>
+      {lines.map((line, i) => {
+        const h = /^(#{1,6})\s+(.*)$/.exec(line);
+        const nodes = mdInline(h ? h[2] : line, i);
+        return (
+          <span key={i}>
+            {h ? <strong style={{ fontSize:"1.08em" }}>{nodes}</strong> : nodes}
+            {i < lines.length - 1 ? "\n" : null}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 export function AIResult({ loading, text, loadingText, onRegenerate, regenerateLabel = "🔄 もう一度分析する" }) {
   return (
     <div style={{ background:"#fff", borderRadius:12, padding:20, minHeight:200, boxShadow:"0 1px 4px rgba(0,0,0,.08)" }}>
       {loading
         ? <p style={{ color:"#888", textAlign:"center", paddingTop:40 }}>{loadingText || "分析中..."}</p>
-        : <div style={{ fontSize:14, lineHeight:1.8, color:"#333", whiteSpace:"pre-wrap" }}>{text}</div>}
+        : <div style={{ fontSize:14, lineHeight:1.8, color:"#333", whiteSpace:"pre-wrap" }}><Markdown text={text} /></div>}
       {!loading && text && onRegenerate && (
         <div style={{ marginTop:18, paddingTop:14, borderTop:`1px solid ${COLORS.border}`, textAlign:"center" }}>
           <Btn variant="ghost" onClick={onRegenerate} style={{ padding:"9px 18px", fontSize:13 }}>{regenerateLabel}</Btn>

@@ -309,6 +309,28 @@ npm run test:dataloss  # 手入力消失対策の実機ブラウザ回帰テス�
 > **エラー文字列の全文を最初に取っていれば、1回で分かりました。**
 > 発注時に「**エラーは要約せず全文をそのまま貼る**」を求めること（§3・§4-2）。
 >
+> ### ★ 追加の実測（2026-08-24・原因を層まで特定）
+>
+> エラーの全文を見ると、Codex は**同梱の `pwsh.exe`** を起動しようとして失敗しています。
+> パス: `~/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell/pwsh.exe`
+> 失敗の形: `CreateProcess { message: "Rejected(\"Failed to create unified exec process:
+> helper_unknown_error: setup refresh had errors\")" }`
+>
+> **その `pwsh.exe` は実在し、Claude Code から直接叩くと正常に動きます**
+> （PowerShell 7.6.4 / exit 0。同ディレクトリに依存 351 ファイルが揃っている）。
+>
+> | 疑い | 判定 |
+> |---|---|
+> | リポジトリ・作業ツリー | ❌ 照合コマンドすら届いていない |
+> | `pwsh.exe` が無い／壊れている | ❌ 実在し正常動作 |
+> | 依存ファイルの欠落 | ❌ 351ファイル揃っている |
+> | OS がプロセスを作れない | ❌ 他プロセスからは作れる |
+> | **Codex 内部の unified exec 層** | ✅ **ここだけが残る** |
+>
+> **Codex を再起動しても直りませんでした。** リポジトリ側に打てる手はありません。
+> Codex が使えない間の実装は §1「例外1」でユーザーが Claude Code に指示できます
+> （2026-08-24 に実際にそうしました。`STATE.md` 追記23）。
+
 > **対処はリポジトリ側にありません。** Codex のアプリ／CLI を完全に終了して起動し直す、
 > それでも駄目なら再インストールや再起動といった **Codex 側の環境修復**が必要です。
 > Codex が使えない間、`src/` の変更は止まります。

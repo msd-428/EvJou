@@ -10,7 +10,7 @@ import {
   emptyForm, emptyGoals, normalizeRoutines, buildTodaySequence,
   isRoutineDue, scheduleSummary, pruneByDateKey, pruneTodos,
 } from "./lib/domain.js";
-import { PERSONAS, DEFAULT_AI_CONFIG, applyAiConfig, callAI, setProxyConsentHandler } from "./api/client.js";
+import { PERSONAS, DEFAULT_AI_CONFIG, ANALYSIS_SYSTEM, applyAiConfig, callAI, setProxyConsentHandler } from "./api/client.js";
 import {
   storageGet, storageSet, storageRemove, exportData, importDataFile,
 } from "./storage/index.js";
@@ -258,7 +258,7 @@ ${openTodos}
       return `=== ${fmtDate(d)} ===\n${body}`;
     }).join("\n\n");
     try {
-      const result = await callAI([{ role: "user", content: "以下の直近の日記を分析し、傾向・成長・アドバイスをください。\n\n" + recent }], null, 1200, onAiStatus);
+      const result = await callAI([{ role: "user", content: "以下の直近の日記を分析し、傾向・成長・アドバイスをください。\n\n" + recent }], ANALYSIS_SYSTEM, 1200, onAiStatus);
       updateRemaining(result);
       setTrendText(result.text);
     } catch (err) { setTrendText(aiErrorMessage(err)); }
@@ -302,7 +302,7 @@ ${routineSummary}
 2. 目標との乖離や注意すべきパターン
 3. 目標達成のための具体的な次のアクション提案`;
     try {
-      const result = await callAI([{ role: "user", content: prompt }], null, 1200, onAiStatus);
+      const result = await callAI([{ role: "user", content: prompt }], ANALYSIS_SYSTEM, 1200, onAiStatus);
       updateRemaining(result);
       setGoalsText(result.text);
     }

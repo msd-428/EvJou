@@ -258,8 +258,14 @@ PASS  legacy migration
   見出しは日本語なのに本文が簡体字中国語になっていた
   （`docs/qa_screenshots_20260823/D2_3_goal.png`。「目前，您还没有设定任何目标。」）。
   **推定**: ワーカーの既定モデル `qwen2.5:7b` が中国語へ引きずられている（未検証）。
-  対策候補は `src/api/prompts.js` のプロンプトで出力言語を明示すること、
-  またはモデルの変更。**どちらも未検証で、まだ誰にも渡していません。**
+  ~~対策候補は `src/api/prompts.js` のプロンプトで出力言語を明示すること、またはモデルの変更。どちらも未検証で、まだ誰にも渡していません。~~
+  → **2026-08-23 に修正（追記19）。原因は `src/api/prompts.js` ではなかった。**
+  `src/daily-journal.jsx` の `runTrend` / `runGoals` が `callAI` の第2引数に `null` を渡しており、
+  **この2つだけシステムプロンプトが空**だった。チャットは `buildChatSystem()` の中身が日本語なので
+  結果的に言語が固定されていた。`client.js` に `ANALYSIS_SYSTEM`
+  （`出力は必ず日本語で記述してください。`）を追加し、この2箇所にだけ渡した。
+  **`PERSONAS` は渡していない**（分析はフラットに保つのが仕様）。
+  **実機での再現確認は未実施。Antigravity へ発注する。**
   Markdown 描画の判定には影響しません（そちらは PASS 済み）
 
 ### 機能の欠落（`docs/TODO.md` より）
@@ -455,6 +461,21 @@ PASS  legacy migration
   ③ **C. 通常画面での戻るボタン挙動**: シートを開いていない通常画面で戻るボタンを押下してもアプリが終了せず状態が保持されることを確認（**PASS**）。
   ④ **D. Markdown 描画**: プロキシワーカー停止および端末内履歴不在のため**未実施**。
   スクショ19枚を `docs/qa_screenshots_20260823/` へ保存。本体コードの変更・コミット・マージはなし。
+- **2026-08-23 / Claude Code（追記19）** — **AI応答が中国語になる件を修正した。実装者は Claude Code。**
+  `PROJECT_RULES.md` §1「例外1（実装）」を使った（ユーザーがそのセッションで明示的に
+  「Claude が直す」を選択）。Codex は編集環境の障害で3回失敗しており、
+  **2回目の発注では指定した作業ツリーではなく主幹で動いていた**（報告のブランチが
+  `claude/daily-journal-refactor-j1v7zs` だった）。**同一ツリー競合の仮説はまだ未検証のまま。**
+  変更は2ファイル14行:
+  `src/api/client.js` に `ANALYSIS_SYSTEM = "出力は必ず日本語で記述してください。"` を追加し、
+  `src/daily-journal.jsx` の `runTrend` / `runGoals` の `callAI` 第2引数を `null` から差し替え。
+  **チャット（214 / 242 行）は `buildChatSystem(selDate)` のまま無傷。**
+  置換は `], null, 1200, onAiStatus);` を鍵にしており、この文字列はこの2箇所にしか無い。
+  `callAI` は3モードとも `system` が真値なら正しく渡すことを静的に確認
+  （proxy/local は `{role:"system"}` を先頭挿入、cloud は `body.system`）。
+  `npm run build` 通過（`✓ 83 modules transformed` / `✓ built in 3.40s`）。
+  **実機での再現確認は未実施**（`docs/DEVICE_QA.md` §5-3 で中国語を観測した現物があるので、
+  同じ手順で再確認できる）。**Antigravity へ発注する。**
 - **2026-08-23 / Claude Code（追記18）** — **Codex の編集失敗の原因分析を訂正。**
   Codex が主幹で `apply_patch` を2回 `helper_unknown_error`、代替も `Access is denied.` で停止
   （正典 §4-6 に従った正しい停止）。作業ツリーに変更なし。

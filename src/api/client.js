@@ -22,6 +22,17 @@ export const PERSONAS = {
   },
 };
 
+// 分析系（傾向・目標）のシステムプロンプト。
+//
+// この2つは PERSONAS を渡さない（上のコメントのとおり、分析はフラットに保つのが仕様。
+// 設定画面にも「AIチャットの口調のみ変わります（傾向・目標の分析はフラットなまま）」と出る）。
+// その結果システムプロンプトが丸ごと空になっており、既定モデル qwen2.5 が
+// 中国語で返してくる事故が実機で起きた（2026-08-23 / OPPO Reno A・docs/DEVICE_QA.md §5-3）。
+// チャットだけ無事だったのは PERSONAS の tone が日本語で、言語が結果的に固定されていたため。
+//
+// **ここに口調や分析方針を足さないこと。** 足すと上の仕様に反する。言語指定だけを持たせる。
+export const ANALYSIS_SYSTEM = "出力は必ず日本語で記述してください。";
+
 // AI接続設定。App側でロード時に applyAiConfig で上書きする。
 export const DEFAULT_AI_CONFIG = {
   mode: "proxy",                                // "proxy"(=EvJou AI) | "local" | "cloud"(=BYOK)

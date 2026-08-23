@@ -19,12 +19,49 @@
 **このリポジトリに `main` / `master` はありません。** 事実上の主幹は
 `claude/daily-journal-refactor-j1v7zs` で、`origin/HEAD` がこれを指しています。
 
+> ### ★ ブランチ一覧の最新は下の「追記16」の表です（2026-08-23）
+>
+> すぐ下の表は 2026-08-21 時点のもので、**3本が既に削除済みです。** 経緯として残します。
+
 | ブランチ | HEAD | 状態 |
 |---|---|---|
 | `claude/daily-journal-refactor-j1v7zs` | `ea99b5f` | **事実上の主幹。クリーン。** LPマージ済み・版数 1.1.0 確定済み。**`origin`（`3adba1e`）より5コミット先＝未push** |
-| `claude/evjou-landing-page-completion-a2a3df` | `d9a34cc` | **主幹へマージ済み（fast-forward）。役目を終えた。**削除してよいが未削除 |
+| `claude/evjou-landing-page-completion-a2a3df` | `d9a34cc` | ~~主幹へマージ済み。削除してよいが未削除~~ → **2026-08-23 に削除済み** |
 | `wip/lp-scratch-20260730` | `22deaf7` | **退避専用。** 2026-07-30 のLP試行錯誤と作業ゴミを丸ごと保全。**作業に使わないこと。**捨てた判断を戻したいときだけ参照する |
-| `claude/agent-harness-setup-44f86f` | — | 本ハーネス導入の作業ツリー |
+| `claude/agent-harness-setup-44f86f` | — | ~~本ハーネス導入の作業ツリー~~ → **2026-08-23 に削除済み** |
+
+### ブランチ一覧（2026-08-23 実測・追記16）
+
+```
+* claude/daily-journal-refactor-j1v7zs  f000ceb  [origin/...: ahead 7]  ← 主幹
++ claude/evjou-ui-fixes-1f4fa5          516e8ff  (E:/.../evjou-ui-fixes) ← 主幹へマージ済み。作業ツリーが使用中
+  wip/lp-scratch-20260730               22deaf7                          ← 退避専用。主幹に未取り込み。消さないこと
+```
+
+**`origin` にあるブランチは `claude/daily-journal-refactor-j1v7zs` の1本だけ**（`git branch -r` で実測）。
+したがって下の削除はすべて**ローカルのみ**で、リモートには影響していません。
+
+ユーザー決定（2026-08-23）により、**主幹へ取り込み済みの3本を削除しました。**
+`git merge-base --is-ancestor` で取り込み済みを確認したうえで、`-D` ではなく
+**`-d`（マージ済みでなければ拒否する安全な方）**で消しています。
+
+| 削除したブランチ | 削除時の HEAD |
+|---|---|
+| `claude/laughing-bassi-3c0d32` | `52e4ec5` |
+| `claude/agent-harness-setup-44f86f` | `3024461` |
+| `claude/evjou-landing-page-completion-a2a3df` | `d9a34cc` |
+
+**`wip/lp-scratch-20260730` は残しています。主幹に取り込まれていない唯一のブランチ**で、
+2026-07-30 の捨てた判断を戻すための退避先だからです（実測で未取り込みを確認）。
+**消さないでください。**
+
+> ### ⚠️ `origin` は **公開（public）リポジトリ**です（2026-08-23 実測）
+>
+> `https://github.com/msd-428/EvJou.git` — GitHub API が 200 を返すので**誰でも閲覧できます。**
+> push した内容は取り消しても検索エンジンやキャッシュに残りえます。
+> **実データのスクリーンショット・個人情報・秘密情報を含むコミットを push しないこと。**
+> なお `proxy/.env` は追跡されていますが中身は `OLLAMA_URL` のみで秘密ではありません
+> （API キー・認証情報・keystore は履歴にありません。2026-08-23 に全件確認済み）。
 
 2026-08-21 に主幹へ積んだコミット（`52e4ec5` の上）:
 
@@ -402,6 +439,14 @@ PASS  legacy migration
   ③ **C. 通常画面での戻るボタン挙動**: シートを開いていない通常画面で戻るボタンを押下してもアプリが終了せず状態が保持されることを確認（**PASS**）。
   ④ **D. Markdown 描画**: プロキシワーカー停止および端末内履歴不在のため**未実施**。
   スクショ19枚を `docs/qa_screenshots_20260823/` へ保存。本体コードの変更・コミット・マージはなし。
+- **2026-08-23 / Claude Code（追記16）** — ユーザー決定により後片付け。
+  **主幹へ取り込み済みの3ブランチを削除**（`laughing-bassi-3c0d32` / `agent-harness-setup-44f86f` /
+  `evjou-landing-page-completion-a2a3df`。いずれも `-d` で安全削除。§1 に表）。
+  `wip/lp-scratch-20260730` は**主幹に未取り込みの唯一のブランチ**なので残した。
+  **★ push 前の安全確認で新事実**: `origin` は**公開リポジトリ**だった（GitHub API 200）。
+  秘密の混入は全件確認して無し（`proxy/.env` は `OLLAMA_URL` のみ。keystore・
+  serviceAccountKey は履歴になし）。§1 に警告を追加。
+  **`origin` へは主幹が7コミット先**（`6278c72` → `f000ceb`）。
 - **2026-08-23 / Claude Code（追記15・追記14の検証）** — **D の再実施を承認。D-1/D-2/D-3 とも PASS。**
   §5-1 で取り消した1回目との違いは、**AI に実際に Markdown を出させたこと**。
   決め手は `D2_1_chat_bold.png` で、**同じ画面にユーザー側の `**Tip 1:**`（素のまま）と

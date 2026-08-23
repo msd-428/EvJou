@@ -320,3 +320,92 @@ IME を一時的に LatinIME へ切り替えれば ASCII をそのまま送れ�
 - `E3_chat_result.png` / `E3_chat_result_top.png` — E-3 AIチャット結果（下部・上部）
 - `E3_chat_result_crop.png` — E-3 AIチャットの本文拡大クロップ
 
+---
+
+## 7. F. ToDo連打更新・「🔥 今日へ」期限の実機検証（2026-08-24）
+
+- **検証日時**: 2026-08-24 03:34〜03:46 JST
+- **担当**: Antigravity (実機QA・観測記録)
+- **対象端末**: OPPO Reno A (`CPH1983` / ColorOS / Android 9 / Chrome 74 相当の WebView)
+  - adb serial: `1d05e7bc`
+- **対象パッケージ**: `com.masuda.evjou`
+- **ビルド情報**:
+  - `versionCode`: 3
+  - `versionName`: 1.1.0
+  - `lastUpdateTime`: `2026-08-24 03:31:17`（事前確認コマンド `adb -s 1d05e7bc shell dumpsys package com.masuda.evjou | findstr lastUpdateTime` にて確認一致）
+- **外部環境**: プロキシワーカー（PID 504652）および Ollama（`qwen2.5:7b`）稼働中
+
+### 検証結果一覧
+
+| 項目 | 検証内容 | 判定 | 証拠スクリーンショット |
+|---|---|---|---|
+| **F-1. 連打で更新を取りこぼさないか (Run 1)** | 複数ToDoがある状態で、間を置かずにチェックを連続タップしたとき、2件とも完了になるか | **PASS** | `F1_1_run1_samepos.png`<br>`F1_run1_crop.png` |
+| **F-1. 連打で更新を取りこぼさないか (Run 2)** | 完了済みリストの2件を間を置かずに連続タップしたとき、2件とも未完了へ復帰するか | **PASS** | `F1_2_run2_uncheck.png`<br>`F1_run2_crop.png` |
+| **F-1. 連打で更新を取りこぼさないか (Run 3)** | 再度、未完了ToDoのチェックを間を置かずに連続タップしたとき、2件とも完了になるか | **PASS** | `F1_3_run3.png`<br>`F1_run3_crop.png` |
+| **F-2. 「🔥 今日へ」の期限が今日になるか** | 過去の日付（2026/08/20）を選択した状態で、ダンプモードのAI提案タスクから「🔥 今日へ」（および「⚡ すべて今日へ」）を押したとき、ToDoに追加されたタスクの期限日が今日（2026-08-24）になるか | **PASS** | `F2_2_past_date_selected.png`<br>`F2_date_crop.png`<br>`F2_12_todo_screen.png`<br>`F2_todo_due_crop.png`<br>`F2_15_todo_all_today.png`<br>`F2_todo_all_due_crop.png` |
+
+### 詳細な検証手順と観測事実
+
+#### F-1. 連打で更新を取りこぼさないか（3回実施）
+
+- **事前準備**: 「✅ ToDo」タブにて手動で4件のToDo（`たsk1`, `あ`, `C`, `D`）を追加（`F1_0_todos_4items.png`）。
+- **Run 1 (未完了→完了 連続タップ)**:
+  - 1行目のチェックボックス位置（`138 1140`）を間を置かずに連続2回タップ（`adb shell input tap 138 1140; adb shell input tap 138 1140`）。
+  - 観測: 1打目で元の1行目（`あ`）が完了になりリストから外れ、即座に繰り上がった次の項目（`C`）に2打目が届き完了になった。完了済みセクションに `たsk1`, `あ`, `C` の3件（直前に追加していた2件＋既存1件）が正しく並び、2回の更新がどちらも欠落することなく2件とも完了状態へ移行した（`F1_1_run1_samepos.png`, `F1_run1_crop.png`）。
+  - **判定: PASS**
+- **Run 2 (完了済み→未完了 連続タップ)**:
+  - 完了済みリストの1行目（`138 1650`）と2行目（`138 1720`）を間を置かずに連続タップ（`adb shell input tap 138 1650; adb shell input tap 138 1720`）。
+  - 観測: 完了状態にあった `たsk1` と `あ` の2件が同時に完了解除され、期限未設定（未完了）リストへ復帰（期限未設定 3件、完了済み 1件 `C` のみ残存）。2件とも正常に反映（`F1_2_run2_uncheck.png`, `F1_run2_crop.png`）。
+  - **判定: PASS**
+- **Run 3 (未完了→完了 連続タップ)**:
+  - 未完了リストの1行目（`138 1140`）を間を置かずに連続2回タップ（`adb shell input tap 138 1140; adb shell input tap 138 1140`）。
+  - 観測: 1打目で `たsk1` が完了になり、繰り上がった `あ` に2打目が届いて完了になった。完了済みセクションに `たsk1`, `あ`, `C` の3件が入り、未完了は `D` 1件のみとなった。2件とも正しく完了反映（`F1_3_run3.png`, `F1_run3_crop.png`）。
+  - **判定: PASS**
+
+#### F-2. 「🔥 今日へ」の期限が今日になるか
+
+- **手順1（過去の日付を選択）**:
+  - 「✏️ 記録」タブにて日付セレクタをタップし、4日前の過去日 **`2026/08/20` (木)** を選択・設定（`F2_2_past_date_selected.png`, `F2_date_crop.png`）。
+- **手順2（ダンプモードで提案タスクを生成）**:
+  - 「🧠 ダンプモード」を展開し、テキストを入力して「✨ AIで整理する」を実行。
+  - ※ 試行時、LLMのJSON生成揺らぎにより次のエラーダイアログが観測されたため、ダイアログを閉じてテキストを整理後に再試行した。
+    - エラー1: `整理に失敗しました: Unexpected token : in JSON at position 26`
+    - エラー2: `整理に失敗しました: Unexpected token , in JSON at position 17`
+  - テキストを入力して再実行後、AI整理が成功し「✨ AIからの提案タスク」として4件（`ノイズを整理する`, `大目標を設定する`, `中目標を設定する`, `近目標を設定する`）が生成された（`F2_9_scrolled.png`）。
+- **手順3（「🔥 今日へ」を押下）**:
+  - 提案タスク1件目「ノイズを整理する」の「🔥 今日へ」ボタンを押下（`F2_10_filed_today.png`）。
+  - さらに残りの提案タスクに対して「⚡ すべて今日へ」を押下（`F2_14_proposals.png`）。
+- **手順4（「✅ ToDo」タブで期限日を確認）**:
+  - 「✅ ToDo」タブへ移動し、追加されたToDoの期限表示を確認。
+  - 観測:
+    - 個別に「🔥 今日へ」を押した「ノイズを整理する」の期限バッジが **`8/24`**（今日の日付）になっていることを確認（`F2_12_todo_screen.png`, `F2_todo_due_crop.png`）。過去の日付（`8/20`）にはなっていない。
+    - 「⚡ すべて今日へ」で追加された残り3件（`大目標を設定する`, `中目標を設定する`, `近目標を設定する`）の期限バッジもすべて **`8/24`** になっていることを確認（`F2_15_todo_all_today.png`, `F2_todo_all_due_crop.png`）。
+  - **判定: PASS**
+
+### スクリーンショット一覧（保存先: `docs/qa_screenshots_20260824/`）
+
+- `F0_initial.png` — アプリ起動時初期画面
+- `F1_0_todo_tab.png` — ToDoタブ初期画面
+- `F1_0_todos_4items.png` — 手動追加した4件のToDo
+- `F1_1_run1_samepos.png` — F-1 Run 1 連続タップ結果（2件完了）
+- `F1_run1_crop.png` — F-1 Run 1 拡大クロップ
+- `F1_2_run2_uncheck.png` — F-1 Run 2 連続完了解除結果（2件復帰）
+- `F1_run2_crop.png` — F-1 Run 2 拡大クロップ
+- `F1_3_run3.png` — F-1 Run 3 連続タップ結果（2件完了）
+- `F1_run3_crop.png` — F-1 Run 3 拡大クロップ
+- `F2_1_date_picker.png` — カレンダー日付ピッカー
+- `F2_2_past_date_selected.png` — 過去の日付（2026/08/20）選択画面
+- `F2_date_crop.png` — 選択した過去の日付（2026/08/20）拡大クロップ
+- `F2_3_dump_opened.png` / `F2_3_dump_box.png` — ダンプモード展開
+- `F2_5_organized.png` / `F2_5_organized_retry.png` — AI整理時のエラー表示記録
+- `F2_6_text_entered.png` / `F2_7_kb_closed.png` — ダンプテキスト入力
+- `F2_8_organize_result.png` — AI整理成功・保存完了トースト
+- `F2_9_scrolled.png` — 生成された提案タスク4件一覧
+- `F2_10_filed_today.png` — 「ノイズを整理する」を「🔥 今日へ」登録後
+- `F2_12_todo_screen.png` — ToDoタブ画面（期限 `8/24` 表示）
+- `F2_todo_due_crop.png` — 「ノイズを整理する」の期限 `8/24` 拡大クロップ
+- `F2_14_proposals.png` — 残り提案タスクの「⚡ すべて今日へ」押下前
+- `F2_15_todo_all_today.png` — 全提案タスク追加後のToDoタブ画面
+- `F2_todo_all_due_crop.png` — 全4件の期限 `8/24` 拡大クロップ
+
+

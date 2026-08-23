@@ -461,6 +461,25 @@ PASS  legacy migration
   ③ **C. 通常画面での戻るボタン挙動**: シートを開いていない通常画面で戻るボタンを押下してもアプリが終了せず状態が保持されることを確認（**PASS**）。
   ④ **D. Markdown 描画**: プロキシワーカー停止および端末内履歴不在のため**未実施**。
   スクショ19枚を `docs/qa_screenshots_20260823/` へ保存。本体コードの変更・コミット・マージはなし。
+- **2026-08-24 / Claude Code（追記22・追記21の検証 ＋ 原因分析の最終訂正）**
+  **① 実機QA（E-1〜E-3）の PASS を承認。中国語の件は直っている。**
+  スクショを自分で開いて確認: `E1_1_goal_run1_crop.png` と `E1_2_goal_run2_crop.png` が
+  **2回連続で見出し・本文とも完全な日本語**。前回の簡体字（`目前，您还没有设定任何目标。`）は消えている。
+  `E2_trends_result_crop.png` も日本語で、Markdown 見出し（`分析と評価` / `傾向` / `成長`）と
+  太字も効いている。**修正した2箇所（`runTrend` / `runGoals`）を両方とも目視で確認済み。**
+  E-3（チャット）は変更していない経路で、退行なし。
+  **② ★ Codex の編集失敗について、原因分析を最終訂正した（`PROJECT_RULES.md` §6）。**
+  2026-08-24、Codex が**着手前の照合コマンドの段階**で3回とも次のエラーで停止:
+  `CreateProcess { message: "Rejected(\"Failed to create unified exec process:
+  helper_unknown_error: setup refresh had errors\")" }`
+  **`git branch --show-current` すら実行できていない**＝リポジトリに触る前の失敗。
+  したがって「入れ子ツリー説」も「Claude Code が開いているツリー説」も**両方とも誤り**。
+  **真の原因は Codex 自身の実行ヘルパーの故障で、リポジトリ側は無関係。**
+  対処は Codex の完全終了・再起動、それでも駄目なら再インストール等の**Codex 側の環境修復**。
+  **③ 既知バグ2件（`operations.md` §5-1 / §5-2）は Codex 待ちで未着手。**
+  **④ 軽微な観測**: Antigravity の日記入力がまた IME に食われた
+  （`をけpあrlyんdんじょいぇd うpfぇ`）。`ime set` の直後に待たずタップしたため。
+  言語判定には影響しないが、次回は IME 切替後に待つこと。
 - **2026-08-24 / Claude Code（追記20）** — **`e4111e2` の APK を OPPO Reno A へ導入。**
   ユーザーの明示指示による `PROJECT_RULES.md` §1「例外2（実機）」の適用（2例目）。
   `assembleDebug` → `adb -s 1d05e7bc install -r`。
@@ -546,6 +565,12 @@ PASS  legacy migration
   ③ **D-3. 目標分析の生成**: 「✨ 分析を生成する」の返答において、構造化テキストが正常に描画されていることを確認（**PASS** / `D2_3_goal.png`, `D2_3_goal_scroll.png`）。
   ④ **IME 復元**: Simeji の日本語入力モード（「あ」）へ復帰を確認（`D2_ime_restored.png` / `settings get secure default_input_method` 出力: `com.simeji.android.oppo/com.adamrocker.android.input.simeji.OpenWnnSimeji`）。
   スクショを `docs/qa_screenshots_20260823/` へ保存。本体コード（`src/` と `proxy/index.js`）の変更・コミット・マージはなし。
+- **2026-08-24 / Antigravity（追記21）** — OPPO Reno A（`1d05e7bc` / Chrome 74 相当 / `versionCode=3`, `lastUpdateTime=2026-08-24 00:36:30`）にて、AI応答言語の修正確認（実機QA E-1〜E-3）を実施（`docs/DEVICE_QA.md` §6）。
+  ① **E-1. 目標分析の言語**: 「✨ 分析を生成する」を実行し、見出し・本文ともに簡体字中国語の混入がなく完全な日本語で出力されることを確認（**PASS**）。さらに「🔄 目標を分析し直す」で2回目を連続実行し、同様に完全な日本語で出力されることを確認（**PASS** / 2回とも）。
+  ② **E-2. 傾向の読み解き言語**: 「✨ 傾向を読み解く」を実行し、見出し（傾向/成長/アドバイス）および本文すべてが日本語で出力されることを確認（**PASS**）。
+  ③ **E-3. AIチャットの言語**: 「🤖 AIから話しかけてもらう」を実行し、日本語出力が維持され退行がないことを確認（**PASS**）。
+  スクショ14枚（拡大クロップ4枚を含む）を `docs/qa_screenshots_20260824/` へ保存。本体コード（`src/` と `proxy/index.js`）の変更・コミット・マージはなし。
+
 
 
 

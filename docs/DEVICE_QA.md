@@ -259,3 +259,64 @@ IME を一時的に LatinIME へ切り替えれば ASCII をそのまま送れ�
 中国語へ引きずられたものと**推定**します（未検証）。
 **Markdown 描画の判定には影響しません**が、配布前に直すべき実害のある不具合です。
 `.agents/STATE.md` §3 へ記録しました。**未発注。**
+
+---
+
+## 6. E. AI応答言語の実機検証（2026-08-24 / Antigravity が実施）
+
+- **検証日時**: 2026-08-24 00:50〜01:00 JST
+- **担当**: Antigravity (実機QA・観測記録)
+- **対象端末**: OPPO Reno A (`CPH1983` / ColorOS / Android 9 / Chrome 74 相当の WebView)
+  - adb serial: `1d05e7bc`
+- **対象パッケージ**: `com.masuda.evjou`
+- **ビルド情報**:
+  - `versionCode`: 3
+  - `versionName`: 1.1.0
+  - `lastUpdateTime`: `2026-08-24 00:36:30`（事前確認コマンド `adb -s 1d05e7bc shell dumpsys package com.masuda.evjou | findstr lastUpdateTime` にて確認一致）
+- **外部環境**: プロキシワーカー（PID 504652）および Ollama（`qwen2.5:7b`）稼働中
+
+### 検証結果一覧
+
+| 項目 | 検証内容 | 判定 | 証拠スクリーンショット |
+|---|---|---|---|
+| **E-1. 目標分析の言語 (1回目)** | AIタブ →「目標」→「✨ 分析を生成する」の返答で、見出し・本文ともに簡体字中国語が混ざらず日本語で出力されるか | **PASS** | `E1_1_goal_run1.png`<br>`E1_1_goal_run1_scroll.png`<br>`E1_1_goal_run1_bottom.png`<br>`E1_1_goal_run1_crop.png` |
+| **E-1. 目標分析の言語 (2回目)** | 再度「🔄 目標を分析し直す」を実行し、連続して日本語で返答されるか（再現性・確実性の検証） | **PASS** | `E1_2_goal_run2.png`<br>`E1_2_goal_run2_top.png`<br>`E1_2_goal_run2_verytop.png`<br>`E1_2_goal_run2_crop.png` |
+| **E-2. 傾向の読み解き言語** | AIタブ →「傾向」→「✨ 傾向を読み解く」の返答で、見出し・本文ともに日本語で出力されるか | **PASS** | `E2_trends_result.png`<br>`E2_trends_result_scroll.png`<br>`E2_trends_result_crop.png` |
+| **E-3. AIチャットの言語** | AIタブ →「チャット」→「🤖 AIから話しかけてもらう」の返答で、日本語出力が維持され退行がないか | **PASS** | `E3_chat_result.png`<br>`E3_chat_result_top.png`<br>`E3_chat_result_crop.png` |
+
+### 詳細な検証手順と観測事実
+
+- **事前準備**:
+  - 「記録」タブにて今日（2026/08/24）の日記にテキストを入力し保存（`02_journal_saved.png`）。
+- **E-1. 目標分析の言語（1回目・2回目）**:
+  - AIタブ →「目標」を開き、「✨ 分析を生成する」を実行。
+  - 1回目観測: 「1. 最近の行動は各目標にどれだけ近づいているか」「2. 目標との乖離や注意すべきパターン」「3. 目標達成のための具体的な次のアクション提案」の見出しおよび本文すべてが自然な日本語で生成された（簡体字中国語の混入なし、`E1_1_goal_run1.png`, `E1_1_goal_run1_crop.png`）。
+  - 最下部の「🔄 目標を分析し直す」をタップして2回目を実行。
+  - 2回目観測: 同様に「1. 最近の行動は各目標にどれだけ近づいているか：」「2. 目標との乖離や注意すべきパターン：」「3. 目標達成のための具体的な次のアクション提案：」の見出しおよび本文すべてが自然な日本語で生成された（`E1_2_goal_run2.png`, `E1_2_goal_run2_crop.png`）。
+  - **判定: PASS（2回とも）**
+- **E-2. 傾向の読み解き言語**:
+  - AIタブ →「傾向」を開き、「✨ 傾向を読み解く」を実行。
+  - 観測: 「傾向」「成長」「アドバイス」の見出しおよび各項目（「1. 目標の設定:」「2. 感謝の表現:」「1. 言語の誤り:」等）の本文すべてが完全な日本語で出力された（`E2_trends_result.png`, `E2_trends_result_crop.png`）。
+  - **判定: PASS**
+- **E-3. AIチャットの言語**:
+  - AIタブ →「チャット」を開き、「🤖 AIから話しかけてもらう」を実行。
+  - 観測: 「今日のエントリは以下のようになっています：」「- 大目標、中目標、近目標が未設定。」「- 今日の目標と明日の目標も未記入。」等の箇条書きおよび問いかけ文が日本語で正常に出力された。退行なし（`E3_chat_result.png`, `E3_chat_result_crop.png`）。
+  - **判定: PASS**
+
+### スクリーンショット一覧（保存先: `docs/qa_screenshots_20260824/`）
+
+- `00_initial.png` — アプリ起動時初期画面
+- `01_input_check.png` / `02_journal_saved.png` — 日記入力・保存確認
+- `04_ai_tab.png` — AIタブ初期画面
+- `E1_0_goal_tab.png` — 目標サブタブ初期画面
+- `E1_1_goal_run1.png` / `E1_1_goal_run1_scroll.png` / `E1_1_goal_run1_bottom.png` — E-1 目標分析1回目（上部・中間・最下部）
+- `E1_1_goal_run1_crop.png` — E-1 目標分析1回目の本文拡大クロップ
+- `E1_2_goal_run2.png` / `E1_2_goal_run2_top.png` / `E1_2_goal_run2_verytop.png` — E-1 目標分析2回目（全体・上部・最上部）
+- `E1_2_goal_run2_crop.png` — E-1 目標分析2回目の本文拡大クロップ
+- `E2_0_trends_tab.png` — 傾向サブタブ初期画面
+- `E2_trends_result.png` / `E2_trends_result_scroll.png` — E-2 傾向分析結果（上部・下部）
+- `E2_trends_result_crop.png` — E-2 傾向分析の本文拡大クロップ
+- `E3_0_chat_tab.png` — チャットサブタブ初期画面
+- `E3_chat_result.png` / `E3_chat_result_top.png` — E-3 AIチャット結果（下部・上部）
+- `E3_chat_result_crop.png` — E-3 AIチャットの本文拡大クロップ
+

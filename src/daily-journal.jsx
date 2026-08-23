@@ -96,21 +96,27 @@ export default function App() {
   const todaySequence = buildTodaySequence(todos, todayStr());
 
   // 提案タスクを1件ずつ仕分ける。押した瞬間に消えて手応えが出るようリストから即座に取り除く。
+  //
+  // 期限の基準は selDate ではなく todayStr()。ボタンは「🔥 今日へ」「📅 明日のToDoへ」と
+  // 絶対的な日付を約束しており、画面で過去の日付を開いていても意味は変わらないため
+  // （selDate を使っていて、過去日を開くと期限がその過去日になっていた。docs/operations.md §5-2）。
+  // todayStr() は toLocalDateStr()（ローカル基準）。toISOString() は使わない。
   const fileProposal = (p, when) => {
     if (when === "routine") {
       const rejected = addRoutinesDirect([p.text]);
       if (rejected > 0) { alert("ルーチンの上限超過、または既に同じルーチンがあります。"); return; }
     } else {
-      addExtractedTodos([{ text: p.text, when }], selDate);
+      addExtractedTodos([{ text: p.text, when }], todayStr());
       if (when === "today") setShowSequence(true);   // 追加結果がすぐ見えるように開く
     }
     setProposedTodos(prev => prev.filter(item => item.id !== p.id));
   };
 
   // 残り全部を今日のToDoへ（提案順＝実行順を保ったまま投入）
+  // 基準日は fileProposal と同じ理由で todayStr()。
   const fileAllToday = () => {
     if (proposedTodos.length === 0) return;
-    addExtractedTodos(proposedTodos.map(p => ({ text: p.text, when: "today" })), selDate);
+    addExtractedTodos(proposedTodos.map(p => ({ text: p.text, when: "today" })), todayStr());
     setShowSequence(true);
     setProposedTodos([]);
   };

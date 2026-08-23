@@ -12,27 +12,31 @@ export function useTodos(settings) {
 
   // 保存（完了ToDoの件数制限を適用）。useStorage が自動で永続化する。
   // 関数アップデータも受け付ける（提案タスクを1件ずつ連続で追加しても取りこぼさないため）。
+  //
+  // **下の操作はすべて関数アップデータで呼ぶこと。** クロージャの todos を読んで渡すと、
+  // 同一描画サイクル内に2回操作したとき2回目が古い配列を基に上書きし、先の更新が消える
+  // （連打で取りこぼす。docs/operations.md §5-1）。値渡しに戻さないこと。
   const saveTodos = (next) => setTodos(prev =>
     pruneTodos(typeof next === "function" ? next(prev) : next, settings.limitDoneTodos));
 
   const addTodoManual = () => {
     const text = todoInput.trim();
     if (!text) return;
-    saveTodos([...todos, {
+    saveTodos(prev => [...prev, {
       id: uid(), text, done: false, source: "manual",
       createdAt: todayStr(), dueDate: null,
     }]);
     setTodoInput("");
   };
 
-  const toggleTodo = (id) => saveTodos(todos.map(t => t.id === id ? { ...t, done: !t.done } : t));
-  const removeTodo = (id) => saveTodos(todos.filter(t => t.id !== id));
-  const updateTodoDueDate = (id, dueDate) => saveTodos(todos.map(t => t.id === id ? { ...t, dueDate } : t));
-  const updateTodoText = (id, text) => saveTodos(todos.map(t => t.id === id ? { ...t, text } : t));
+  const toggleTodo = (id) => saveTodos(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t));
+  const removeTodo = (id) => saveTodos(prev => prev.filter(t => t.id !== id));
+  const updateTodoDueDate = (id, dueDate) => saveTodos(prev => prev.map(t => t.id === id ? { ...t, dueDate } : t));
+  const updateTodoText = (id, text) => saveTodos(prev => prev.map(t => t.id === id ? { ...t, text } : t));
 
   const clearDoneTodos = () => {
     if (!window.confirm("完了済みのToDoをすべて削除しますか？")) return;
-    saveTodos(todos.filter(t => !t.done));
+    saveTodos(prev => prev.filter(t => !t.done));
   };
 
   // AI抽出結果をToDoへ統合（既存テキストと重複しないものだけ追加）。

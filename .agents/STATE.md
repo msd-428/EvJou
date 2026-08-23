@@ -213,6 +213,15 @@ PASS  beforeunload save
 PASS  legacy migration
 ```
 
+**2026-08-24 実測（追記23・`useTodos.js` と `daily-journal.jsx` 修正後）** — 4件すべて PASS:
+
+```
+PASS  autosave→reload
+PASS  dateswitch flush
+PASS  beforeunload save
+PASS  legacy migration
+```
+
 ビルドは「chunks are larger than 500 kB」警告を出しますが**無害**です
 （`dist/assets/index-DOxdGjEC.js` が 921.20 kB）。`PROJECT_RULES.md` §6 参照。
 
@@ -241,12 +250,19 @@ PASS  legacy migration
 
 ### アプリ本体（`docs/operations.md` §5 より・いずれも未修正）
 
-- **§5-1 ボタン連打で更新を取りこぼす。** `src/features/useTodos.js` が関数アップデータではなく
-  クロージャの `todos` を見ているため、同一描画サイクル内の2操作で先の更新が消えます。
-  人間の指では通常踏みません。データは壊れません
-- **§5-2 過去の日付を開いた状態の「🔥 今日へ」が今日にならない。**
-  `src/daily-journal.jsx` の `fileProposal` が「今日」ではなく「画面で選択中の日付」を期限に入れます。
-  ボタンのラベルと実挙動が食い違っています
+- ~~**§5-1 ボタン連打で更新を取りこぼす。**~~ → **2026-08-24 修正（追記23）。実装者は Claude Code。**
+  `src/features/useTodos.js` の `addTodoManual` / `toggleTodo` / `removeTodo` /
+  `updateTodoDueDate` / `updateTodoText` / `clearDoneTodos` の6箇所を関数アップデータへ。
+  `saveTodos` は元から関数アップデータを受け付ける作りで、`addExtractedTodos` だけが
+  正しく使っていた。**値渡しへ戻さないよう理由をコメントに残した。**
+  **実機確認は未実施。**
+- ~~**§5-2 過去の日付を開いた状態の「🔥 今日へ」が今日にならない。**~~
+  → **2026-08-24 修正（追記23）。実装者は Claude Code。**
+  `src/daily-journal.jsx` の `fileProposal` の基準日を `selDate` → `todayStr()` へ。
+  **同じ欠陥が `fileAllToday`（「残り全部を今日のToDoへ」）にもあったので併せて直した。**
+  `addExtractedTodos` の呼び出し元はこの2箇所だけで、範囲外への波及なし。
+  `todayStr()` は `toLocalDateStr()`（ローカル基準）。`toISOString()` は使っていない。
+  **実機確認は未実施。**
 - **§5-4 同意ダイアログの文言が実態と食い違う。**
   「サーバー上にデータは保存されません」と表示しますが、実際にはリクエスト文書（日記本文を含む）が
   Firestore 上に**最大24時間**（`KEEP_HOURS`）残ります。
@@ -461,6 +477,22 @@ PASS  legacy migration
   ③ **C. 通常画面での戻るボタン挙動**: シートを開いていない通常画面で戻るボタンを押下してもアプリが終了せず状態が保持されることを確認（**PASS**）。
   ④ **D. Markdown 描画**: プロキシワーカー停止および端末内履歴不在のため**未実施**。
   スクショ19枚を `docs/qa_screenshots_20260823/` へ保存。本体コードの変更・コミット・マージはなし。
+- **2026-08-24 / Claude Code（追記23）** — **既知バグ2件を修正した。実装者は Claude Code。**
+  `PROJECT_RULES.md` §1「例外1（実装）」による（ユーザーが明示的に選択）。
+  Codex は実行ヘルパーの故障で使えず、原因も特定済み（下記）。
+  **① §5-1 連打取りこぼし**: `useTodos.js` の6箇所を関数アップデータへ。
+  **② §5-2 「🔥 今日へ」の日付**: `fileProposal` の基準日を `selDate` → `todayStr()`。
+  **同じ欠陥が `fileAllToday` にもあったので併せて直した**（呼び出し元は2箇所だけ）。
+  `npm run build` 通過。`useJournal.js` は未変更だが保存系フックを触ったので
+  `npm run test:dataloss` も回して**4件すべて PASS**。実出力は §2 に追記。
+  **実機確認は未実施。挙動が変わるので Antigravity へ発注する。**
+  **★ Codex が使えない原因を確定した**（`PROJECT_RULES.md` §6）:
+  Codex は同梱の `pwsh.exe`
+  （`~/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell/pwsh.exe`）を
+  起動しようとして `Failed to create unified exec process` で失敗している。
+  **その `pwsh.exe` は実在し、Claude Code から直接叩くと正常に動く**（PowerShell 7.6.4 / exit 0、
+  同ディレクトリに依存351ファイル）。つまり**バイナリでも依存でも OS でもなく、
+  Codex 内部の実行サンドボックス層の問題**。リポジトリ側で打てる手はない。
 - **2026-08-24 / Claude Code（追記22・追記21の検証 ＋ 原因分析の最終訂正）**
   **① 実機QA（E-1〜E-3）の PASS を承認。中国語の件は直っている。**
   スクショを自分で開いて確認: `E1_1_goal_run1_crop.png` と `E1_2_goal_run2_crop.png` が

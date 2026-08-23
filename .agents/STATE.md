@@ -199,6 +199,16 @@ PASS  legacy migration
   Firestore 上に**最大24時間**（`KEEP_HOURS`）残ります。
   **他人に配布する前に文言を直すか `KEEP_HOURS` を短くすること。v1リリース前の宿題**
 
+### AIの応答品質（2026-08-23 に実機で発見・**未修正・未発注**）
+
+- **AIの「目標」分析が中国語で返ってくることがある。** 2026-08-23 の実機QA（OPPO Reno A）で観測。
+  見出しは日本語なのに本文が簡体字中国語になっていた
+  （`docs/qa_screenshots_20260823/D2_3_goal.png`。「目前，您还没有设定任何目标。」）。
+  **推定**: ワーカーの既定モデル `qwen2.5:7b` が中国語へ引きずられている（未検証）。
+  対策候補は `src/api/prompts.js` のプロンプトで出力言語を明示すること、
+  またはモデルの変更。**どちらも未検証で、まだ誰にも渡していません。**
+  Markdown 描画の判定には影響しません（そちらは PASS 済み）
+
 ### 機能の欠落（`docs/TODO.md` より）
 
 - **ToDoがスケジュール生成に渡っていない。** `src/features/useSchedule.js` の `generateSchedule` は
@@ -392,6 +402,17 @@ PASS  legacy migration
   ③ **C. 通常画面での戻るボタン挙動**: シートを開いていない通常画面で戻るボタンを押下してもアプリが終了せず状態が保持されることを確認（**PASS**）。
   ④ **D. Markdown 描画**: プロキシワーカー停止および端末内履歴不在のため**未実施**。
   スクショ19枚を `docs/qa_screenshots_20260823/` へ保存。本体コードの変更・コミット・マージはなし。
+- **2026-08-23 / Claude Code（追記15・追記14の検証）** — **D の再実施を承認。D-1/D-2/D-3 とも PASS。**
+  §5-1 で取り消した1回目との違いは、**AI に実際に Markdown を出させたこと**。
+  決め手は `D2_1_chat_bold.png` で、**同じ画面にユーザー側の `**Tip 1:**`（素のまま）と
+  AI 側の太字描画（`**` が消えている）が並んでいる**。見間違いの余地がない。
+  `AIResult` 経路（Codex の修正）も `D2_2_trends.png` / `D2_3_goal.png` で太字描画を確認。
+  ワーカーのログにも `✅ 処理完了 ... (本日 8/50 回)` まで記録あり。
+  **これで A/B/C/D すべて実機で確認済みになった。**
+  Antigravity の手順も良かった（IME を Simeji の英字モードへ切り替えて ASCII を通し、
+  終了後に日本語モードへ復帰。復帰の出力も貼られている）。
+  **★ 検証中に別件を1つ発見**: AIの「目標」分析が**中国語**で返っていた（§3 に記録・**未発注**）。
+  詳細は `docs/DEVICE_QA.md` §5-3。
 - **2026-08-23 / Claude Code（追記13・追記12の検証）** — **Antigravity の D 判定（PASS ×3）を取り消した。**
   スクショ3枚を自分で開いたところ、**AI の返答に Markdown 記法が1つも含まれていなかった**
   （`**` も `#` も無い素のテキスト）。したがって「アスタリスクが見えない」ことしか示しておらず、
@@ -410,5 +431,12 @@ PASS  legacy migration
   ② **D-2. 傾向の読み解き**: 「✨ 傾向を読み解く」の返答において、各項目がMarkdownとして整形されて描画されることを確認（**PASS** / `D_2_trends.png`）。
   ③ **D-3. 目標分析の生成**: 「✨ 分析を生成する」の返答において、見出しや構造化テキストが生のMarkdown記号なしで正常に描画されることを確認（**PASS** / `D_3_goal.png`）。
   スクショを `docs/qa_screenshots_20260823/` へ保存。本体コード（`src/` と `proxy/index.js`）の変更・コミット・マージはなし。
+- **2026-08-23 / Antigravity（追記14）** — OPPO Reno A（`1d05e7bc` / Chrome 74 相当 / versionCode 3 / lastUpdateTime `2026-08-23 05:09:10`）にて D. Markdown 実機描画を再実施（`docs/DEVICE_QA.md` §5-2）。
+  ① **D-1. AIチャット太字描画**: Simeji を英字モード（QWERTY）にして `Give me 3 tips for time management. Format every tip title in bold like **Tip 1:**` を誤変換なく送信（`D2_0_input_check.png`）。AI 返答において `**Tip 1: ...**`, `**Tip 2: ...**`, `**Tip 3: ...**` のアスタリスク（`**`）が露出せず、各見出しが `<strong>`（太字）として正常に描画されていることを確認（**PASS** / `D2_1_chat_bold.png`, `D2_1_crop.png`）。
+  ② **D-2. 傾向の読み解き**: 「✨ 傾向を読み解く」の返答において、見出しやリスト項目が生のMarkdown記号なしで構造化描画されていることを確認（**PASS** / `D2_2_trends.png`, `D2_2_trends_scroll.png`）。
+  ③ **D-3. 目標分析の生成**: 「✨ 分析を生成する」の返答において、構造化テキストが正常に描画されていることを確認（**PASS** / `D2_3_goal.png`, `D2_3_goal_scroll.png`）。
+  ④ **IME 復元**: Simeji の日本語入力モード（「あ」）へ復帰を確認（`D2_ime_restored.png` / `settings get secure default_input_method` 出力: `com.simeji.android.oppo/com.adamrocker.android.input.simeji.OpenWnnSimeji`）。
+  スクショを `docs/qa_screenshots_20260823/` へ保存。本体コード（`src/` と `proxy/index.js`）の変更・コミット・マージはなし。
+
 
 

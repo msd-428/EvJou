@@ -150,12 +150,12 @@ export default function App() {
       if (aiCfg.proxyConsent) return true;
       // 文言はユーザーが確定したもの（2026-08-24）。実態と食い違わせないこと。
       // 旧文は「サーバー上にデータは保存されません」だったが、実際には要求文書（日記本文を含む）が
-      // Firestore に残る。削除はワーカー稼働中のみ30分ごとに走り、KEEP_HOURS(=24) を超えた
+      // Firestore に残る。削除はワーカー稼働中のみ30分ごとに走り、KEEP_HOURS(=1) を超えた
       // 「処理済み」文書だけが対象。詳しい説明は設定画面（components/settings.jsx）に置いてある。
       if (!window.confirm(
         "EvJou AIを利用すると、日記の内容が開発者のサーバーへ送信されます。\n\n"
         + "・AIの処理は開発者の自宅PCで行います。外部のAI事業者には渡りません\n"
-        + "・送信内容は中継サーバー（Google Firestore）に一時保存され、通常24時間以内に削除されます\n"
+        + "・送信内容は中継サーバー（Google Firestore）に一時保存され、通常2時間以内に削除されます\n"
         + "・開発者は技術的には送信内容を見られますが、日記の内容は閲覧しません\n\n"
         + "利用しますか？"
       )) return false;

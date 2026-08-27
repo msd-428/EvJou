@@ -16,7 +16,12 @@ const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS || 120000); // 1�
 const RETRY_MAX = 5;         // Ollama へのリトライ回数
 const RETRY_WAIT_MS = 5000;  // リトライ間隔
 const DAILY_LIMIT = Number(process.env.DAILY_LIMIT || 50); // 1日の利用上限（暴走対策・PC負荷軽減の安全弁）
-const KEEP_HOURS = Number(process.env.KEEP_HOURS || 24);    // 終了した文書の保持時間
+const KEEP_HOURS = Number(process.env.KEEP_HOURS || 1);     // 終了した文書の保持時間
+// 24→1 に短縮（2026-08-28）。要求文書には日記本文が入るので、Firestore に置く時間を減らす。
+// 掃除は SWEEP_INTERVAL_MS（30分）ごとなので、実際の削除は処理後 1〜1.5時間。
+// ユーザー向けの文言は安全側に丸めて「2時間以内」と書いてある
+// （src/daily-journal.jsx の同意ダイアログ と src/components/settings.jsx）。
+// この値を変えるときは、その2箇所と docs/operations.md も同じ差分で揃えること。
 const SWEEP_INTERVAL_MS = 30 * 60 * 1000;
 
 // 非終端ステータス。ワーカー再起動時はこれらを pending に戻す。

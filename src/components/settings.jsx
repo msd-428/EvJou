@@ -230,7 +230,7 @@ export function AiSettings({ cfg, onSave, aiUsage }) {
 
           {/* 上と同じ理由でここも実態に合わせてある。約束（閲覧しない）と能力（見られる）を分けて書くこと。 */}
           <p style={{ margin:"0 0 6px", fontSize:11, color:COLORS.textSub, lineHeight:1.6 }}>
-            送信内容は中継サーバー（Google Firestore）に一時保存され、処理後24時間以内に自動削除されます。
+            送信内容は中継サーバー（Google Firestore）に一時保存され、処理後2時間以内に自動削除されます。
             ただし削除はサーバーの稼働中にのみ実行されるため、失敗した記録が残る場合があります。
             開発者は技術的には送信内容を見られますが、日記の内容は閲覧しません。
           </p>

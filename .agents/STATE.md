@@ -511,6 +511,25 @@ PASS  legacy migration
   - 「⚡ すべて今日へ」で追加された全3件（`大目標を設定する`, `中目標を設定する`, `近目標を設定する`）の期限バッジもすべて **`8/24`** になっていることを確認（**PASS** / `F2_todo_all_due_crop.png`）。
   ※ AI整理の初回・2回目にLLM出力揺らぎによるJSONパースエラー（`Unexpected token : in JSON at position 26` / `Unexpected token , in JSON at position 17`）を観測。ダイアログ閉じ・再実行で成功。
   スクショ23枚（拡大クロップ7枚含む）を `docs/qa_screenshots_20260824/` へ保存。本体コード（`src/` と `proxy/index.js`）の変更・コミット・マージはなし。
+- **2026-08-29 / Claude Code（追記29・Antigravity の調査を検証）** — **Codex の障害は解決した。**
+  **原因は Codex 内部ではなく、`Evjou/.git` の Windows 所有者が `BUILTIN\Administrators` だったこと。**
+  非昇格で動く Codex のサンドボックス初期化が、このフォルダへ保護用 ACE を付けられずに失敗し、
+  それが `setup refresh had errors` としてコマンド起動を止めていた。
+  調査は Antigravity（監督役として発注）、修復は管理者権限の `takeown` + `icacls`（301オブジェクト）。
+  記録は `E:/!master_0428/Document/Claude/_codex_bug_20260829/`（**EvJou の外**）。
+  **Claude Code が独立に裏取りした結果**: 所有者は `MSD428\maste` に変更済み、
+  修復後は `deny ACE failed` の再発 **0回** / `errors=[]` **3回**、
+  EvJou リポジトリは無傷（`git status` クリーン・`git fsck` 異常なし・`origin` と一致）。
+  **★ ただし Antigravity の「過去のエラー100%がこれ」は誤り。**
+  Codex が3回失敗した **08-24 のログにはこのエラーが1件も無い**
+  （`processed 0 write roots; errors=[]`）。**08-24 が同一原因かは不明**と限定して記録した。
+  **★ 正典 §6 の「Codex 内部のバグで確定」「リポジトリ側に打てる手はない」を訂正した。**
+  併せて「Claude Code が開いているツリーだと失敗する」ように見えた理由も判明
+  （ワークスペースが `Evjou/` の内側かどうかで、問題の `.git` が保護対象に入るかが変わっていた）。
+  **教訓**: 道具が失敗したら、その道具のログを探すこと。原因は
+  `~/.codex/.sandbox/sandbox.YYYY-MM-DD.log` にそのまま書かれていた。
+  **未解決の別件**: `C:/Users/Default` に対する同種の権限警告が本日74回出ている（非致命・未対応）。
+  **最終確認は次の発注が通るかどうか。まだ実使用での確認はしていない。**
 - **2026-08-28 / Claude Code（追記28）** — **`KEEP_HOURS` を 24→1 へ短縮。実装者は Claude Code。**
   ユーザー決定（範囲は「短縮のみ。TTL は見送り」）＋ `PROJECT_RULES.md` §1「例外1」。
   **Codex は4回目の失敗**（08-24 に3回、08-28 に1回。同じ

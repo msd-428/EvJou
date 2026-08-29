@@ -35,8 +35,17 @@ ${current}
 # 出力形式（JSONのみ。コードブロック記号不要。キーは以下のとおり厳密に）
 {${schema}}`;
 
-  const result = await callAI([{ role: "user", content: prompt }], "", 2000);
-  return JSON.parse(extractJson(result.text));
+  const messages = [{ role: "user", content: prompt }];
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const result = await callAI(messages, "", 2000);
+    try {
+      return JSON.parse(extractJson(result.text));
+    } catch {
+      if (attempt === 1) {
+        throw new Error("AIの整理結果を読み取れませんでした。もう一度お試しください。");
+      }
+    }
+  }
 }
 
 // 今日/明日の目標から具体的な実行可能ToDoを抽出する。

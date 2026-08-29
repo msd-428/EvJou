@@ -309,7 +309,44 @@ npm run test:dataloss  # 手入力消失対策の実機ブラウザ回帰テス�
 > **エラー文字列の全文を最初に取っていれば、1回で分かりました。**
 > 発注時に「**エラーは要約せず全文をそのまま貼る**」を求めること（§3・§4-2）。
 >
-> ### ★ 追加の実測（2026-08-24・原因を層まで特定）
+> ### ★★★★ 解決（2026-08-29）— 原因は **このリポジトリの `.git` の Windows 所有者**でした
+>
+> 下に「Codex 内部のバグで確定」「リポジトリ側に打てる手はない」と書いていますが、
+> **どちらも誤りでした。** 真の原因はこうです。
+>
+> **`E:/!master_0428/Document/Claude/Evjou/.git` の所有者が `BUILTIN\Administrators` に
+> なっていたため、非昇格で動く Codex のサンドボックス初期化
+> （`codex-windows-sandbox-setup.exe`）が、このフォルダへ保護用の deny ACE を
+> 付けられずに失敗していました。** それが `setup refresh had errors` の正体で、
+> 結果としてコマンドが1つも起動できませんでした。
+>
+> ```
+> 修復前  deny ACE failed on ...\Evjou\.git: SetNamedSecurityInfoW failed ...: 5
+>         setup refresh completed with errors: [...]
+> 修復後  applied deny ACE to protect ...\Evjou\.git
+>         setup refresh: processed 3 write roots; errors=[]
+> ```
+>
+> **修復**: 管理者権限で `takeown` により所有権をログインユーザーへ移し、
+> `icacls` でフルコントロールを付与（301オブジェクト）。
+> 調査は Antigravity、検証は Claude Code。記録は
+> `E:/!master_0428/Document/Claude/_codex_bug_20260829/`（**EvJou の外**）。
+>
+> **なぜ「Claude Code が開いているツリーだと失敗する」ように見えたのか**も、これで説明が付きます。
+> 失敗した回はワークスペースが `Evjou/` の内側にあり、問題の `.git` が保護対象に入っていました。
+> 成功した回（`evjou-ui-fixes`）はリポジトリの外にあり、対象外だったためです。
+> **相関は本物でしたが、原因は「誰が開いているか」ではなく「どの `.git` が範囲に入るか」でした。**
+>
+> **★ ただし限定が必要です。** Codex が3回失敗した **2026-08-24 のログにはこのエラーが1件もなく**
+> （`processed 0 write roots; errors=[]`）、その日の失敗は本件では説明できません。
+> Codex の版数も当時と違います。**解決したのは 08-27 以降の失敗**であり、
+> 08-24 が同一原因かは**不明**です。
+>
+> **教訓**: 3回とも「Codex 側の問題」と読んだのは、**Codex のログを見ていなかった**からです。
+> `~/.codex/.sandbox/sandbox.YYYY-MM-DD.log` に原因がそのまま書かれていました。
+> **道具が失敗したら、その道具のログを探すこと。**
+
+> ### ~~★ 追加の実測（2026-08-24・原因を層まで特定）~~ → **上の解決が正**
 >
 > エラーの全文を見ると、Codex は**同梱の `pwsh.exe`** を起動しようとして失敗しています。
 > パス: `~/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell/pwsh.exe`

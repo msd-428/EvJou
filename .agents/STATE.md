@@ -804,3 +804,64 @@ EvJou AIを利用すると、日記の内容が開発者のサーバーへ送信
 
 
 
+
+- **2026-08-30 / Claude Code（追記31・A-1段目の検証と、OPPO への APK 焼き直し）**
+  ユーザー決定により §5-1「実機で見た目を確認」に着手。**焼く対象は OPPO のみ**、
+  **同意文言は現状のまま（「通常2時間以内に削除されます」で確定）**、
+  **`versionCode` は上げない**（`3` は `6d90ea6` でリリース版数として確定済みで、
+  デバッグ入れ替えで消費しないため。入れ替わりの確認は `lastUpdateTime` で取る）。
+  **`src/`・`android/` は1行も変更していない。実装は発生していない。**
+  - **A-1段目（ブラウザ実測・設定画面は PASS）**: dev サーバを幅 375×812 で開き、
+    `src/components/settings.jsx` の AI セクションを実測。`docOverflowX=false` /
+    はみ出し要素 0 件 / 当該段落は `w=303 h=88`・`font 11px`・`line-height 17.6px`・**5行**。
+    **文字数が約2倍になった件による崩れは無かった。**
+  - **同意ダイアログはブラウザでは判定できない。** `src/daily-journal.jsx:155` は
+    `window.confirm` で、見た目は WebView 側が決めるため。分量のみ記録:
+    **全166文字 / 7行（うち空行2）**、最長行は52文字
+    （「・送信内容は中継サーバー（Google Firestore）に一時保存され、通常2時間以内に削除されます」）。
+    **推定（未検証）**: 幅375dpだと箇条書き3行が各2行に折り返し、実際は10行前後。
+    AlertDialog は本文がスクロールする作りなので崩れではなくスクロール発生を想定。**実機で確定させること。**
+  - **文言の非対称（未対応・ユーザー判断で現状維持）**: 同意ダイアログは「**通常**2時間以内に削除されます」
+    とだけ書き、設定画面にある「削除はサーバー稼働中にのみ実行されるため失敗した記録が残る場合があります」
+    に当たる注記が無い。**ユーザーが現状のままでよいと判断した。**
+  - **ビルドと導入（実施者は Claude Code・`PROJECT_RULES.md` §1 例外2 の明示指示あり）**:
+    `npm run build`（`✓ 83 modules transformed.` / `✓ built in 2.77s`）→ `npx cap sync android`
+    → `./gradlew assembleDebug`（`BUILD SUCCESSFUL in 17s` / 153 tasks）。
+    APK は 4,420,903 bytes / 2026-08-30 18:53:58。
+    `adb -s 1d05e7bc install -r ...` → `Performing Streamed Install` / `Success`。
+    `src/features/useJournal.js` は未変更のため `test:dataloss` は**未実施**。
+  - **触った端末と触っていない端末**:
+
+    ```
+    1d05e7bc (OPPO Reno A)  lastUpdateTime  2026-08-24 03:31:17 → 2026-08-30 18:54:14  ← 入れ替えた
+    a5f1d85  (Mi 10 Pro)    lastUpdateTime  2026-07-30 22:52:46 → 2026-07-30 22:52:46  ← 無変更
+    ```
+
+    **Mi 10 Pro は `versionCode=1` / `versionName=1.0`（2026-07-30）のままで、
+    7/30 以降の修正が1件も入っていない。**ユーザー本人が毎日使う実データ機なので、
+    直したものが本人に届いていない状態が続いていることを記録しておく。**未着手。**
+  - **★ 入れ子ツリーではビルドできないことを実測した。**
+    `Evjou/.claude/worktrees/evjou-handover-db397a` で `npx cap sync android` を走らせると、
+    `android/capacitor.settings.gradle` の参照が `../node_modules` →
+    **`../../../../node_modules`（＝主幹の node_modules）**に書き換わる。4階層深いため。
+    同ツリーの変更は `git checkout --` で戻し、**ビルドは主幹で実施した**（主幹では中身の差分ゼロ、
+    改行コードのみ。こちらも `git checkout --` で戻してクリーン）。
+    `PROJECT_RULES.md` §6「入れ子はやめる」を補強する実例。
+    **なお本セッションはその入れ子ツリーで起動されている。役目が終わったら畳むこと。**
+  - **★ A-3段目（実機確認）を止めている要因（未解決・ユーザー判断待ち）**:
+    **OPPO は既に同意済みなので、このままでは同意ダイアログが出ない。**
+    読み取りで確認した実出力:
+
+    ```
+    $ adb -s 1d05e7bc shell run-as com.masuda.evjou cat shared_prefs/CapacitorStorage.xml
+        <string name="evjou_ai-config">{"mode":"proxy", ... ,"proxyConsent":true}</string>
+    ```
+
+    出すには保存済みの `ai-config` の `proxyConsent` を `false` に戻す必要がある。
+    保存先は IndexedDB（`journal_v1` / ストア `kv` / キー `ai-config`）で、
+    読み出しは IndexedDB → Preferences → localStorage の順なので**IndexedDB を直せば足りる**。
+    **`pm clear` は禁止**（日記データごと消える。`PROJECT_RULES.md` §1）。
+    **アプリのデータを1フィールドだけ書き換える操作なので、ユーザーの許可なしに実行しない。**
+  - **プロキシワーカーは停止中のまま**（§6 の記述は有効）。同意ダイアログはAI送信の前に出るので
+    ワーカー無しでも確認できるが、**AIの「傾向」「目標分析」「チャット」の Markdown 描画確認には
+    ワーカーの起動が要る**（起動担当は Claude Code）。**未起動。**

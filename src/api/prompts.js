@@ -10,7 +10,8 @@ import { extractJson } from "../lib/json.js";
 // 項目はユーザーが増減・リネームできるため、プロンプトも出力スキーマも fields から組み立てる。
 export async function dumpProcess(dumpText, form, goals, fields) {
   const current = fields.map(f => `- ${f.label}: ${form[f.key] || "（空）"}`).join("\n");
-  const schema = fields.map(f => `"${f.key}":"${f.label} の内容"`).join(",");
+  const keyMap = fields.map(f => `- ${f.key} = ${f.label}`).join("\n");
+  const schema = fields.map(f => `"${f.key}":""`).join(",");
   const memoField = fields.find(f => f.key === "memo");
   const prompt =
 `あなたはユーザーの外部前頭葉として機能するAIです。ユーザーは疲労や思考混濁の状態で脳内ノイズをそのままテキストとして出力します。以下のダンプテキストを処理してください。
@@ -32,7 +33,11 @@ ${current}
 3. タスクが羅列されている場合はMECEに整理し、実行する順序（朝→夜の物理動線）に沿って並べ替える。精神論ではなく動作で書く。
 4. ${memoField ? `どの項目にも属さない雑多な情報は「${memoField.label}」へ。` : "どの項目にも当てはまらない情報は捨てる。"}
 
-# 出力形式（JSONのみ。コードブロック記号不要。キーは以下のとおり厳密に）
+# 出力形式（JSONのみ。コードブロック記号不要）
+キーと項目の対応:
+${keyMap}
+
+キーは上記${fields.length}個だけ。値は日本語の文字列1つで、項目名や絵文字を値に含めない。
 {${schema}}`;
 
   const messages = [{ role: "user", content: prompt }];

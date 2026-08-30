@@ -33,6 +33,9 @@ export const PERSONAS = {
 // **ここに口調や分析方針を足さないこと。** 足すと上の仕様に反する。言語指定だけを持たせる。
 export const ANALYSIS_SYSTEM = "出力は必ず日本語で記述してください。";
 
+// JSONを返すタスク共通のシステムプロンプト。分析用とは出力契約が異なるため分離する。
+export const JSON_SYSTEM = "出力は必ず日本語で記述してください。JSONのみを返し、コードブロック記号や前後の説明を付けないでください。";
+
 // AI接続設定。App側でロード時に applyAiConfig で上書きする。
 export const DEFAULT_AI_CONFIG = {
   mode: "proxy",                                // "proxy"(=EvJou AI) | "local" | "cloud"(=BYOK)

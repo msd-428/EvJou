@@ -939,3 +939,18 @@ EvJou AIを利用すると、日記の内容が開発者のサーバーへ送信
     **現行LPは「AIが〜」を19箇所で前面に出しており、揃っていない**（事故台帳4件目と同種の乖離）。
     ② **ブラウザ版の配信先が無い。** `landing/` にあるのは静的LPと APK だけで、`dist/` はどこにも置いていない。
     ③ 配布APKをリリース署名で焼き直すなら `versionCode` を上げる判断が要る（`android/` なので Codex 担当）。
+
+- **2026-08-31 / Codex（追記34・AI呼び出しの文脈不足3件を修正）** — 着手前照合は
+  `claude/daily-journal-refactor-j1v7zs` / `b284d97` で一致。次の3件を実装した。
+  ① `src/api/client.js` に JSON 専用の `JSON_SYSTEM` を追加し、スケジュール生成・ダンプ整理・
+  ToDo抽出の3経路へ共通適用。日本語出力と、JSONのみ・コードブロック記号や前後説明なしを指定した。
+  `dumpProcess` の `attempt < 2` リトライは維持。
+  ② `runTrend` は日記7日分を維持したまま、大中近の目標・未完了ToDo・ルーチン達成率も渡すよう変更。
+  `runGoals` は変更なし。
+  ③ `generateSchedule` の横断データ引数に `todos` を追加し、選択日が期限の未完了ToDoを
+  プロンプトの「今日の未完了ToDo」へ追加。
+  仕様変更は `docs/app-specification.md` のスケジュール生成・傾向へ同じ差分で反映した。
+  **検証**: `git diff --check` 通過。対象3経路の空 system は0件、`slice(-7)` と2回リトライを静的確認。
+  最終 `npm run build` 通過（`✓ 83 modules transformed.` / `✓ built in 2.69s`）。
+  `src/features/useJournal.js` は未変更のため `npm run test:dataloss` は未実施。
+  実機・adb・プロキシワーカー・Firestoreには触れていない。コミット・マージ・push はしていない。

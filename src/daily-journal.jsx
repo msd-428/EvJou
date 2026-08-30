@@ -273,8 +273,31 @@ ${openTodos}
       const body = settings.journalFields.map(f => `${f.label}: ${e[f.key] || ""}`).join("\n");
       return `=== ${fmtDate(d)} ===\n${body}`;
     }).join("\n\n");
+    const openTodos = todos.filter(t => !t.done).map(t => `・${t.text}`).join("\n") || "なし";
+    const recentDates = getRecentDates(settings.statsLongDays);
+    const routineSummary = routines.active.map(r => {
+      const due = recentDates.filter(d => isRoutineDue(r, d));
+      const done = due.filter(d => routineChecks[d] && routineChecks[d][r.id]).length;
+      const rate = due.length ? Math.round((done / due.length) * 100) : 0;
+      return `・${r.text}: ${rate}%`;
+    }).join("\n") || "なし";
+    const prompt =
+`以下の直近7日の日記を、目標・未完了ToDo・ルーチン達成率と照らして分析し、傾向・成長・アドバイスをください。
+
+【大目標】${goals.bigGoal || "未設定"}
+【中目標】${goals.midGoal || "未設定"}
+【近目標】${goals.nearGoal || "未設定"}
+
+【直近7日の記録】
+${recent}
+
+【未完了ToDo】
+${openTodos}
+
+【ルーチン達成率（直近${settings.statsLongDays}日）】
+${routineSummary}`;
     try {
-      const result = await callAI([{ role: "user", content: "以下の直近の日記を分析し、傾向・成長・アドバイスをください。\n\n" + recent }], ANALYSIS_SYSTEM, 1200, onAiStatus);
+      const result = await callAI([{ role: "user", content: prompt }], ANALYSIS_SYSTEM, 1200, onAiStatus);
       updateRemaining(result);
       setTrendText(result.text);
     } catch (err) { setTrendText(aiErrorMessage(err)); }
@@ -688,7 +711,7 @@ ${routineSummary}
                 )}
               </div>
 
-              <Btn variant="primary" disabled={schedLoading || !activeBase} onClick={() => generateSchedule({ selDate, entry: entries[selDate] || form, goals, fields: settings.journalFields })}
+              <Btn variant="primary" disabled={schedLoading || !activeBase} onClick={() => generateSchedule({ selDate, entry: entries[selDate] || form, goals, fields: settings.journalFields, todos })}
                 style={{ width:"100%", padding:"13px", fontSize:15, marginBottom:16 }}>
                 {schedLoading ? "⏳ スケジュール生成中..." : "✨ 今日のスケジュールを生成"}
               </Btn>

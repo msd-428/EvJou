@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useStorage } from "../storage/useStorage.js";
-import { callAI } from "../api/client.js";
+import { callAI, JSON_SYSTEM } from "../api/client.js";
 import { extractJson } from "../lib/json.js";
 
 // スケジュールドメイン：ベーススケジュール一覧・選択・AI生成した日次スケジュール。
@@ -31,13 +31,14 @@ export function useSchedule() {
     if (activeBaseId === id) setActiveBaseId(updated[0]?.id || null);
   };
 
-  // 今日のスケジュール生成。selDate/その日のエントリ/目標/ジャーナル項目は App から受け取る。
-  const generateSchedule = async ({ selDate, entry, goals, fields }) => {
+  // 今日のスケジュール生成。selDate/その日のエントリ/目標/ジャーナル項目/ToDoは App から受け取る。
+  const generateSchedule = async ({ selDate, entry, goals, fields, todos }) => {
     if (!activeBase) { alert("先にベーススケジュールを設定してください"); return; }
     setSchedLoading(true);
     const base = activeBase;
     const e = entry;
     const fmt = (arr) => arr.map(b => b.time + " " + b.label).join("\n");
+    const openTodos = todos.filter(t => !t.done && t.dueDate === selDate).map(t => `- ${t.text}`).join("\n") || "なし";
     const prompt =
 `あなたは日次スケジュール作成AIです。以下の情報をもとに、今日の最適なスケジュールをJSON配列で返してください。コードブロック記号不要、JSONのみ。
 
@@ -59,11 +60,14 @@ ${fmt(base.blocks.filter(b => !b.fixed)) || "なし"}
 - 近目標: ${goals.nearGoal || "未設定"}
 ${fields.map(f => `- ${f.label}: ${e[f.key] || "未記入"}`).join("\n")}
 
+## 今日の未完了ToDo
+${openTodos}
+
 ## 出力形式
 [{"time":"HH:MM","label":"タスク名","note":"コメント","fixed":true}]`;
 
     try {
-      const result = await callAI([{ role: "user", content: prompt }], "", 1500);
+      const result = await callAI([{ role: "user", content: prompt }], JSON_SYSTEM, 1500);
       const parsed = JSON.parse(extractJson(result.text));
       setGeneratedScheds({ ...generatedScheds, [selDate]: parsed });
     } catch (err) {

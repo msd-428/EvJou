@@ -1083,3 +1083,21 @@ EvJou AIを利用すると、日記の内容が開発者のサーバーへ送信
   （`qwen2.5:7b` は中国語モデルであり、追記19 の中国語化と同じ根）。
   **③は `proxy/.env` の `OLLAMA_MODEL` で切り替えられるが、他の経路の品質にも影響するため
   ユーザー判断が要る。未発注。**
+
+- **2026-08-31 / Codex（追記38・AI出力の簡体字抑止を強化）** — 着手前照合は
+  `claude/daily-journal-refactor-j1v7zs` / `8ee1f13` で一致。`src/api/client.js` の
+  `ANALYSIS_SYSTEM` と `JSON_SYSTEM` に、言語指定として
+  「漢字は日本の常用漢字を使い、簡体字を使わないでください。」を1文ずつ追加した。
+  人格・分析方針・JSON出力契約は変更していない。
+  **検証**: `git diff --check` 通過。`npm run build` 通過
+  （`✓ 83 modules transformed.` / `✓ built in 3.51s`）。
+  `src/features/useJournal.js` は未変更のため `npm run test:dataloss` は未実施。
+  実機・adb・プロキシワーカー・Firestoreには触れていない。コミット・マージ・push はしていない。
+
+- **2026-08-31 / Claude Code（追記39・追記38の検証）** — 差分は `src/api/client.js` の**2行のみ**で、
+  `ANALYSIS_SYSTEM` と `JSON_SYSTEM` に「漢字は日本の常用漢字を使い、簡体字を使わないでください。」を
+  追加したもの。`buildChatSystem`・`PERSONAS`・プロンプト本体・temperature・`proxy/` は無傷。
+  `npm run build` を Claude Code が実行して通過し、成果物ハッシュ `index-CtDhcLbm.js` が報告と一致。
+  **★ 効果は測れていない。** 元の簡体字混入が間欠（直接再現 0/4）なので、
+  4回程度の試行では改善を主張できない。**言えるのは「文言を足しても JSON のパースは壊れない」
+  （追加文言つきで 4/4 パース成功）まで。** 追記37 の未解決は**閉じていない。**

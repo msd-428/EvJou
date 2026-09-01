@@ -1,7 +1,7 @@
 // タスク別のAI呼び出し（プロンプト＋パース）。
 // 出力はJSON。extractJson で前後の地の文・コードフェンスに耐えてパースする。
 
-import { callAI, JSON_SYSTEM } from "./client.js";
+import { callAI, JSON_SYSTEM, JSON_TEMPERATURE } from "./client.js";
 import { extractJson } from "../lib/json.js";
 
 // ダンプテキストをジャーナル項目へ整理する。
@@ -43,7 +43,7 @@ ${keyMap}
 
   const messages = [{ role: "user", content: prompt }];
   for (let attempt = 0; attempt < 2; attempt++) {
-    const result = await callAI(messages, JSON_SYSTEM, 2000);
+    const result = await callAI(messages, JSON_SYSTEM, 2000, null, JSON_TEMPERATURE);
     try {
       return JSON.parse(extractJson(result.text));
     } catch {
@@ -75,7 +75,7 @@ export async function extractTodos(todayGoal, tomorrowGoal) {
 # 出力形式（JSONのみ）
 [{"text":"...","when":"today"}]`;
 
-  const result = await callAI([{ role: "user", content: prompt }], JSON_SYSTEM, 800);
+  const result = await callAI([{ role: "user", content: prompt }], JSON_SYSTEM, 800, null, JSON_TEMPERATURE);
   try { return JSON.parse(extractJson(result.text)); }
   catch { return []; }
 }

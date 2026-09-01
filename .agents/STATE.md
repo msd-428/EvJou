@@ -1266,3 +1266,60 @@ EvJou AIを利用すると、日記の内容が開発者のサーバーへ送信
   - **日付を切り替えても `lastProcessedDumpText` が初期化されない。**
     8/31 に整理したダンプ本文を残したまま 9/1 へ移ると、同じ本文では整理ボタンが押せない。
     逃げ道は「🗑 クリア」か本文の編集。`selDate` 変更時に初期化する1行で直る。
+
+- **2026-09-01 / Codex（追記44・JSONタスクの温度固定と日付切替ガード解除）** — 着手前照合は
+  `claude/daily-journal-refactor-j1v7zs` / `4d9a479` で一致。`src/api/client.js` に
+  `JSON_TEMPERATURE = 0.2` を追加し、任意の第5引数 `temperature` が指定された場合だけ
+  proxy/local のユーザー設定値を上書きするようにした。ダンプ整理・ToDo抽出・スケジュール生成の
+  JSON 3経路だけが固定値を渡し、チャットと傾向・目標分析は従来の設定値のまま。`callCloud`、
+  設定の既定値 `0.7`、設定画面の説明は変更していない。
+  `useJournal` は `[selDate]` だけに依存する effect で `lastProcessedDumpText` を初期化し、
+  日付を切り替えたときだけ再実行可能にした。`dumpText` と同日内の二度押しガードは維持。
+  温度の扱いは `docs/app-specification.md` に追記した。
+  **検証**: `git diff --check` 通過。最終 `npm run build` 通過
+  （`✓ 83 modules transformed.` / `✓ built in 2.86s`）。`npm run test:dataloss` は初回の
+  サンドボックス内実行が Playwright の `spawn EPERM` で失敗したため、許可済みの外部実行で再試行し、
+  `PASS autosave→reload` / `PASS dateswitch flush` / `PASS beforeunload save` /
+  `PASS legacy migration` の4件を確認。実機・adb・プロキシワーカー・Firestoreには触れていない。
+  コミット・マージ・pushはしていない。
+
+- **2026-09-01 / Claude Code（追記45・追記44の検証）**
+  - 差分は `client.js` / `prompts.js` / `useSchedule.js` / `useJournal.js` ＋ 文書2つのみ。
+    `callAI(messages, system, maxTokens, onStatusChange, temperature = null)` で
+    `temperature ?? aiConfig.temperature` としており、**指定しない呼び出し（チャット・傾向・目標分析）は
+    従来どおりユーザー設定のまま**。`callCloud` は温度を送らない実装なので対象外で無傷。
+    `JSON_TEMPERATURE = 0.2` を渡すのは JSON を返す3箇所だけ。
+    `selDate` 変更時に `lastProcessedDumpText` を初期化する `useEffect` を追加（同日内のガードは維持、
+    `dumpText` は消さない）。
+  - **`npm run test:dataloss` を Claude Code が自分で実行して4件 PASS。**
+  - **★ `??` の混入を確認した**（`PROJECT_RULES.md` §6: Chrome 74 でトランスパイルされずに出ると
+    起動時クラッシュ）。ビルド成果物 `dist/assets/index-aRV3PwtJ.js` を検査した結果、
+    **`??` は0件**。`?.` は3件見つかったが、**すべて三項演算子＋小数**（`t?.55:1` ＝ `t ? .55 : 1`）で
+    Optional Chaining ではなかった。`vite.config.js` の `target: ['es2015','chrome74']` が効いている。
+  - **温度の効果は「示唆」まで。** 同じプロンプトで温度だけ変えて各10回:
+    `0.7` で簡体字 1/10、`0.2` で 0/10、パースはどちらも 10/10。
+    **元の発生率が1割程度なので10回では断定できない。** 追記43 の未解決は**閉じていない。**
+
+  ### ⚠️ 原因不明の観測1件（再現せず・要注意・生命線の領域）
+
+  検証中、**dev サーバのブラウザで 2026-09-01 に保存したはずの内容が、次にリロードしたとき
+  空になっていた。** 消えたのは 9/1 だけで、8/31 は無事だった。
+
+  ```
+  消える前（画面で確認）: todayGoal「切手を買う,鍵のスペアを作りに行く」
+                          grateful「駅で席を譲ってもらったこと,雨が降らなかったこと」
+                          tomorrowGoal「朝イチで銀行に行く」
+  リロード後            : 4項目すべて空。以後の整理で新しい内容だけが入った
+  ```
+
+  **★ 再現を2通り試したが、どちらでも起きなかった。**
+  ① ダンプ整理 → リロード → **データは保たれた**
+  ② ソースを `touch` して HMR を走らせる → **データは保たれた**
+  `useStorage` はハイドレート前の上書きを防いでおり（`readyRef`）、
+  日付切替フラッシュと `beforeunload` はどちらも `dirtyRef` で守られている。
+  `npm run test:dataloss` の4件（自動保存 / 日付切替フラッシュ / beforeunload / レガシー移行）も PASS。
+
+  **したがって原因は特定できていない。** 消えた前後で起きていた他の出来事は、
+  Codex が `src/` を編集したことによる HMR の連続発火（①②では単発しか再現していない）。
+  **実機で観測されたものではなく、dev 環境での1回だけの観測である。**
+  **握りつぶさずに残す。同種の事象を見たら、まずこの追記を参照すること。**

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useStorage } from "../storage/useStorage.js";
-import { callAI, JSON_SYSTEM } from "../api/client.js";
+import { callAI, JSON_SYSTEM, JSON_TEMPERATURE } from "../api/client.js";
 import { extractJson } from "../lib/json.js";
 
 // スケジュールドメイン：ベーススケジュール一覧・選択・AI生成した日次スケジュール。
@@ -67,7 +67,7 @@ ${openTodos}
 [{"time":"HH:MM","label":"タスク名","note":"コメント","fixed":true}]`;
 
     try {
-      const result = await callAI([{ role: "user", content: prompt }], JSON_SYSTEM, 1500);
+      const result = await callAI([{ role: "user", content: prompt }], JSON_SYSTEM, 1500, null, JSON_TEMPERATURE);
       const parsed = JSON.parse(extractJson(result.text));
       setGeneratedScheds({ ...generatedScheds, [selDate]: parsed });
     } catch (err) {

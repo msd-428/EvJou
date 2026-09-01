@@ -42,6 +42,11 @@ export function useJournal({ settings, goals }) {
   const entriesRef = useRef(entries); entriesRef.current = entries;
   const selDateRef = useRef(selDate); selDateRef.current = selDate;
 
+  // 二度押しガードは日付単位。同じ本文でも別の日なら整理できるようにする。
+  useEffect(() => {
+    setLastProcessedDumpText(null);
+  }, [selDate]);
+
   // エントリ保存（件数制限を適用）。useStorage が永続化する。
   const saveEntryState = (newForm) => {
     const updated = pruneByDateKey({ ...entries, [selDate]: newForm }, settings.limitEntriesDays);

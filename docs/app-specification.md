@@ -315,6 +315,7 @@ ToDoから導出する派生ビューになり、実行タスクのデータは 
 ### モデル
 - ローカル：OpenAI互換 `/chat/completions`（Ollama/LM Studio/llama.cpp、既定 `qwen2.5`）
 - クラウド：Anthropic Messages API（既定 `claude-sonnet-5`）
+- JSONを返すダンプ整理・ToDo抽出・スケジュール生成は proxy/local で temperature 0.2 固定。チャットと傾向・目標分析はユーザー設定値（既定0.7）を使い、cloudはtemperatureを送信しない
 - `callClaude()` がモードで分岐。HTTPエラーは `res.ok` チェックで明示throw。
 
 ### 主要プロンプト

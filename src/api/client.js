@@ -36,6 +36,9 @@ export const ANALYSIS_SYSTEM = "出力は必ず日本語で記述してくださ
 // JSONを返すタスク共通のシステムプロンプト。分析用とは出力契約が異なるため分離する。
 export const JSON_SYSTEM = "出力は必ず日本語で記述してください。漢字は日本の常用漢字を使い、簡体字を使わないでください。JSONのみを返し、コードブロック記号や前後の説明を付けないでください。";
 
+// JSONを返すタスクは表現の多様性が不要で、揺れは表記の汚れとして出るため固定する。
+export const JSON_TEMPERATURE = 0.2;
+
 // AI接続設定。App側でロード時に applyAiConfig で上書きする。
 export const DEFAULT_AI_CONFIG = {
   mode: "proxy",                                // "proxy"(=EvJou AI) | "local" | "cloud"(=BYOK)
@@ -89,7 +92,7 @@ async function ensureProxyConsent() {
   aiConfig = { ...aiConfig, proxyConsent: true };
 }
 
-async function callProxy(messages, system, maxTokens, onStatusChange) {
+async function callProxy(messages, system, maxTokens, onStatusChange, temperature) {
   await ensureProxyConsent();
   const user = await ensureAuth();
   const db = getDb();
@@ -101,7 +104,7 @@ async function callProxy(messages, system, maxTokens, onStatusChange) {
       uid: user.uid,
       messages: msgs,
       maxTokens,
-      temperature: aiConfig.temperature,
+      temperature,
       status: "pending",
       createdAt: serverTimestamp(),
     });
@@ -178,13 +181,13 @@ async function callProxy(messages, system, maxTokens, onStatusChange) {
 }
 
 // ── local: OpenAI互換 /chat/completions ──
-async function callLocal(messages, system, maxTokens) {
+async function callLocal(messages, system, maxTokens, temperature) {
   const msgs = system ? [{ role: "system", content: system }, ...messages] : messages;
   const url = aiConfig.localEndpoint.replace(/\/$/, "") + "/chat/completions";
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: aiConfig.localModel, messages: msgs, max_tokens: maxTokens, temperature: aiConfig.temperature, stream: false }),
+    body: JSON.stringify({ model: aiConfig.localModel, messages: msgs, max_tokens: maxTokens, temperature, stream: false }),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
@@ -216,10 +219,10 @@ async function callCloud(messages, system, maxTokens) {
 // ── 統一エントリポイント ──
 // 戻り値: { text: string, usageCount?: number, dailyLimit?: number }
 // onStatusChange(status, queuePosition) は proxy モードのみ呼ばれる。
-export async function callAI(messages, system, maxTokens = 1200, onStatusChange = null) {
-  if (aiConfig.mode === "proxy") return callProxy(messages, system, maxTokens, onStatusChange);
+export async function callAI(messages, system, maxTokens = 1200, onStatusChange = null, temperature = null) {
+  if (aiConfig.mode === "proxy") return callProxy(messages, system, maxTokens, onStatusChange, temperature ?? aiConfig.temperature);
   const text = aiConfig.mode === "local"
-    ? await callLocal(messages, system, maxTokens)
+    ? await callLocal(messages, system, maxTokens, temperature ?? aiConfig.temperature)
     : await callCloud(messages, system, maxTokens);
   return { text };
 }

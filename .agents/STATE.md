@@ -1323,3 +1323,36 @@ EvJou AIを利用すると、日記の内容が開発者のサーバーへ送信
   Codex が `src/` を編集したことによる HMR の連続発火（①②では単発しか再現していない）。
   **実機で観測されたものではなく、dev 環境での1回だけの観測である。**
   **握りつぶさずに残す。同種の事象を見たら、まずこの追記を参照すること。**
+
+- **2026-09-01 / Claude Code（追記46・OPPO へ最新APKを焼き直した）**
+  ユーザー決定（**OPPO のみ／デバッグ署名のまま／`versionCode` は 3 のまま据え置き**）により実施。
+  `PROJECT_RULES.md` §1「例外2（実機）」の明示指示あり。**`src/`・`android/` は変更していない。**
+  - ビルド元: 主幹 `cd56723`（クリーン）。`npm run build`（`✓ 83 modules transformed.` /
+    `✓ built in 3.02s`）→ `npx cap sync android` → `./gradlew assembleDebug`
+    （`BUILD SUCCESSFUL in 26s`）。APK は 4,714,311 bytes / 2026-09-01 22:19。
+  - **★ 焼いた APK の中身を検証した**（LP の APK が古かった件の再発防止・追記33 ④）。
+    APK 内 `assets/public/assets/index-aRV3PwtJ.js` を検査:
+
+    ```
+    通常2時間以内に削除されます        1件   ← 新しい同意文言が入っている
+    キーと項目の対応                  1件   ← D案の出力スキーマが入っている
+    簡体字を使わないでください          1件   ← 追記38 の指定が入っている
+    サーバー上にデータは保存されません   0件   ← 古い嘘の文言は無い
+    ```
+
+  - **触った端末と触っていない端末**:
+
+    ```
+    1d05e7bc (OPPO Reno A)  lastUpdateTime  2026-08-30 18:54:14 → 2026-09-01 22:20:26  ← 入れ替えた
+    a5f1d85  (Mi 10 Pro)    lastUpdateTime  2026-07-30 22:52:46 → 2026-07-30 22:52:46  ← 無変更
+    ```
+
+    `adb -s 1d05e7bc install -r ...` → `Performing Streamed Install` / `Success`。
+    **Mi 10 Pro は今回も対象外。`versionCode=1` / `1.0`（2026-07-30）のままで、
+    7/30 以降の修正が1件も届いていない状態が続いている。未着手。**
+  - `cap sync` が触った `android/app/capacitor.build.gradle` と `android/capacitor.settings.gradle` は
+    中身の差分ゼロ（改行コードのみ）だったので `git checkout --` で戻した。主幹はクリーン。
+  - **アプリの起動と画面操作は行っていない**（`am start` は `PROJECT_RULES.md` §1 で
+    Claude Code に禁止されており、今回の明示指示はインストールまで）。**実機での確認は未実施。**
+  - **配布用（LP の `landing/EvJou-release.apk`）はこれとは別物で、まだ `versionCode=1` のまま。
+    公開前の焼き直しは未着手**（署名の判断も含めて未決）。

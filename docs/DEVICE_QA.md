@@ -493,5 +493,110 @@ Firestore）に一時保存され、通常2
 `00_lockscreen.png` / `01_app_started.png` / `02_after_reload.png` / `03_ai_tab.png` /
 `05_after_consent.png` / `06_settings_sheet.png` / `07_back_to_journal.png` / `08_header_restored.png`
 
+---
 
+## 8. H. 修正したAI経路の実機検証（2026-09-01）
 
+- **検証日時**: 2026-09-01 22:30〜22:59 JST
+- **担当**: Antigravity (実機QA・観測記録)
+- **対象端末**: OPPO Reno A (`CPH1983` / ColorOS / Android 9 / Chrome 74 相当の WebView)
+  - adb serial: `1d05e7bc`
+- **対象パッケージ**: `com.masuda.evjou`
+- **ビルド情報**:
+  - `versionCode`: 4
+  - `versionName`: 1.1.1
+  - `lastUpdateTime`: `2026-09-01 22:20:26`（事前確認コマンド `adb -s 1d05e7bc shell dumpsys package com.masuda.evjou | findstr lastUpdateTime` にて確認一致）
+  - git HEAD: `49a1243`（`git log -n 1 --oneline` にて確認一致）
+- **外部環境**: プロキシワーカーおよび Ollama（`qwen2.5:7b`）稼働中
+
+### 検証結果一覧
+
+| 項目 | 検証内容 | 判定 | 証拠スクリーンショット |
+|---|---|---|---|
+| **H-1. ダンプ整理で既存の記述が消えないこと ★最重要** | 1回目のAI整理で埋まった「明日の目標」がある状態で、ダンプ欄を書き換えて2回目のAI整理を実行したとき、1回目の内容が1文字も消えずに保持・結合されるか。また整理完了直後に「✨ AIで整理する」ボタンが非活性になり、ダンプ欄書き換えで再活性化するか | **PASS** | `08_organize1_status.png`<br>`09_organize1_done.png`<br>`10_organize1_fields1.png`<br>`21_dump_in_view.png`<br>`26_dump_text_entered.png`<br>`27_ready_for_organize2.png`<br>`29_organize2_done.png`<br>`30_organize2_fields1.png`<br>`33_tomorrow_goal_scrolled.png` |
+| **H-2. ToDo抽出とシーケンス** | ダンプ整理後に「AIからの提案タスク」が抽出され、「🔥 今日へ」を押すと「今日の稼働シーケンス」に即座に並ぶか | **PASS** | `11_organize1_fields2.png`<br>`17_tapped_fire_today.png`<br>`18_sequence_after_fire.png` |
+| **H-3. Markdown の描画（3画面）** | AIタブの「傾向」「目標」を実行し、太字と見出しが生テキスト記号として露出せず描画されるか（箇条書きは `Markdown` が未対応なので対象外）。AIチャットで1往復して同様に描画されるか | **PASS** | `40_trends_done.png`<br>`41_trends_scrolled.png`<br>`42_trends_bottom.png`<br>`46_goals_done.png`<br>`47_goals_scrolled.png`<br>`48_goals_bottom.png`<br>`53_chat_response.png`<br>`54_chat_response_top.png`<br>`55_final_state.png` |
+| **H-4. 出力の言語** | H-1〜H-3 で得た返答に簡体字や英語の断片が混じっていないかの観測記録 | **観測記録** | （混入なし・自然な日本語を確認） |
+
+### 詳細な検証手順と観測事実
+
+#### H-1. ダンプ整理で既存の記述が消えないこと（最重要検証）
+
+1. **初期状態の確認**:
+   - ジャーナルの各フィールド（「今日ありがたいこと」「今日の目標」「明日の目標」「ひとこと」）が空であることを確認（`02_journal_fields_init.png`, `03_journal_fields_bottom.png`）。
+2. **1回目ダンプ整理の実行**:
+   - ダンプモードを展開し、次の文章を入力:
+     `今日はとても疲れた。明日は午前中に資料作成を終わらせて、午後から新しい技術の勉強をする。毎日寝る前にストレッチをする習慣をつけたい。`
+   - 「✨ AIで整理する」を押下（`08_organize1_status.png`）。
+   - 処理完了後、各項目への振り分け結果を確認（`09_organize1_done.png`, `10_organize1_fields1.png`）:
+     - 今日ありがたいこと: （空）
+     - 今日の目標: （空）
+     - **明日の目標**: `資料作成を午前中に終了する，新しい技術の勉強を午後に行う，毎日寝る前にストレッチをする習慣をつける`
+     - ひとこと: （空）
+3. **二度押しガードの確認（H-1 ⑤）**:
+   - 1回目の整理完了直後、ダンプ欄のテキストが変更されていない状態では「✨ AIで整理する」ボタンが非活性（薄紫色・disabled）になり押せなくなっていることを確認（`09_organize1_done.png`, `21_dump_in_view.png`）。
+4. **ダンプ欄の書き換えと再活性化確認（H-1 ⑥ & ③）**:
+   - 「🗑 クリア」ボタンを押し、確認ダイアログ（`22_dump_cleared.png`）で「OK」をタップしてダンプ欄をクリア（`23_after_clear_ok.png`）。
+   - 新しい文章を入力:
+     `Good weather today. Friendly neighbor greeted me. Tomorrow morning buy milk at supermarket.`
+   - ダンプ欄書き換えに伴い、「✨ AIで整理する」ボタンが再び活性状態（青色・enabled）へ復帰したことを確認（`26_dump_text_entered.png`, `27_ready_for_organize2.png`）。
+   - 「✨ AIで整理する」を押下し、2回目のAI整理を実行（`28_organize2_processing.png` → `29_organize2_done.png`）。
+5. **既存記述の完全保持確認（H-1 ④ - 最重要判定）**:
+   - 2回目の整理完了後、各フィールドを確認（`29_organize2_done.png`, `30_organize2_fields1.png`, `33_tomorrow_goal_scrolled.png`）:
+     - 今日ありがたいこと: `良い天気で、親切な近所の人から挨拶をもらった。`
+     - **明日の目標**: `資料作成を午前中に終了する，新しい技術の勉強を午後に行う，毎日寝る前にストレッチをする習慣をつける,スーパーマーケットで牛乳を買う。`
+   - **観測結果**: 1回目の実行で保存された「明日の目標」の全37文字が1文字も欠落することなく保持され、末尾に `,スーパーマーケットで牛乳を買う。` が追加結合されたことを確認。
+   - **判定: PASS**
+
+#### H-2. ToDo抽出とシーケンス
+
+1. **提案タスクの抽出**:
+   - 1回目のダンプ整理完了後、「✨ AIからの提案タスク」として次の5件がカード形式で表示されたことを確認（`11_organize1_fields2.png`）:
+     1. `起床する`
+     2. `資料作成開始`
+     3. `午前中資料作成終了`
+     4. `新しい技術の勉強開始`
+     5. `ストレッチをする`
+2. **「🔥 今日へ」によるシーケンス登録**:
+   - 提案タスク「起床する」の「🔥 今日へ」ボタンを押下（`17_tapped_fire_today.png`）。
+   - 画面上部の「🎯 今日の稼働シーケンス」セクションに「🔥 今日 (1)」として「起床する」が即座に追加され、リストに並んだことを確認（`18_sequence_after_fire.png`）。
+   - **判定: PASS**
+
+#### H-3. Markdown の描画（3画面）
+
+1. **「🤖 AI」タブ →「📈 傾向」**:
+   - 「✨ 傾向を読み解く」ボタンを押下（`38_trends_tab_opened.png` → `39_trends_result.png` → `40_trends_done.png`）。
+   - 観測: 見出し（`# 分析と傾向`, `## 目標設定`, `## 未完了Todos`, `## ルーチン達成率`, `## 成長とアドバイス`, `### 成長`, `### アドバイス`）が太字・大フォントで描画され、**箇条書きの `- ` は記号のまま表示される**（`src/components/common.jsx` の `Markdown` は見出し `#`・太字 `**`・インラインコードのみ対応で、リストは実装されていない。仕様どおりで欠陥ではない）ことを確認（`40_trends_done.png`, `41_trends_scrolled.png`, `42_trends_bottom.png`）。
+2. **「🤖 AI」タブ →「🎯 目標」**:
+   - 「✨ 分析を生成する」ボタンを押下（`44_goals_tab_opened.png` → `45_goals_result.png` → `46_goals_done.png`）。
+   - 観測: ナンバリング見出し（`1. 最近の行動は各目標にどれだけ近づいているか`, `2. 目標との乖離や注意すべきパターン`, `3. 目標達成のための具体的な次のアクション提案`）が整形されて描画されていることを確認（箇条書きの `- ` は記号のまま。上と同じ理由）（`46_goals_done.png`, `47_goals_scrolled.png`, `48_goals_bottom.png`）。
+3. **「🤖 AI」タブ →「💬 チャット」**:
+   - 入力欄に `Give me 3 tips for habit building.` を入力し送信（`51_chat_input_focused.png` → `52_chat_text_entered.png` → `53_chat_response.png`）。
+   - 観測: ユーザーの発言が右側青色吹き出し、AIの返答が左側グレー吹き出しに表示され、ナンバリングされた3箇条のTips（明確な目標設定、小さなステップから始める、システム化する）が崩れなく整形されて描画されていることを確認（`54_chat_response_top.png`, `55_final_state.png`）。
+   - **判定: PASS**
+
+#### H-4. 出力の言語（観測記録）
+
+- H-1〜H-3 で生成されたすべてのAI出力テキストを目視精査。
+- **観測事実**:
+  - 簡体字（时・图・买・约 など日本語で使用されない文字）の混入は **0件**。
+  - 英語の断片の意図しない混入も **0件**（チャットで英語プロンプトを入力した場合でも、日本語で自然な回答が生成された）。
+  - すべての項目で自然かつ文法的に正しい日本語が出力された。
+
+### スクリーンショット一覧（保存先: `docs/qa_screenshots_20260901/`）
+
+**リポジトリに入れたのは、判定の根拠になる9枚だけです。**
+`origin` は公開リポジトリで、撮影した56枚（14MB）をすべて追跡する必要はありません
+（`PROJECT_RULES.md` §6「ディレクトリ単位の `git add` をしない」）。
+
+- `10_organize1_fields1.png` — H-1 1回目の整理結果（「明日の目標」に3項目）
+- `21_dump_in_view.png` — H-1 二度押しガード（「✨ AIで整理する」が非活性）
+- `27_ready_for_organize2.png` — H-1 ダンプ欄を書き換えてボタンが再活性化
+- `33_tomorrow_goal_scrolled.png` — **H-1 の本命。1回目の3項目が消えず、末尾に追加されている**
+- `11_organize1_fields2.png` — H-2 AIからの提案タスク
+- `18_sequence_after_fire.png` — H-2 「🔥 今日へ」で稼働シーケンスに並ぶ
+- `40_trends_done.png` — H-3 傾向（見出しが描画されている）
+- `46_goals_done.png` — H-3 目標分析
+- `54_chat_response_top.png` — **H-3 の本命。`1. **明確な目標設定**:` が `**` を出さず太字で描画**
+
+残り47枚は撮影の過程の記録で、**ローカルには残っているがコミットしていません。**

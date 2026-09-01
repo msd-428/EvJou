@@ -86,7 +86,7 @@ export default function App() {
   } = useSchedule();
   const {
     entries, setEntries, form, setForm, selDate, setSelDate, saved,
-    dumpText, setDumpText, dumpLoading, showDump, setShowDump,
+    dumpText, setDumpText, dumpLoading, dumpAlreadyProcessed, showDump, setShowDump,
     showSequence, setShowSequence,
     showSaveToast, hideToast, proposedTodos, setProposedTodos,
     updateField, saveEntry, runDumpProcess, clearDump,
@@ -558,7 +558,7 @@ ${routineSummary}
               rows={7}
               style={{ width:"100%", padding:"10px 12px", borderRadius:10, border:"1px solid #e0dcd5", fontSize:14, resize:"vertical", background:"#fafafa", boxSizing:"border-box", lineHeight:1.7, color:"#333", marginBottom:10 }} />
             <div style={{ display:"flex", gap:8 }}>
-              <Btn variant="primary" onClick={runDumpProcess} disabled={dumpLoading || !dumpText.trim()} style={{ flex:2, padding:"12px" }}>
+              <Btn variant="primary" onClick={runDumpProcess} disabled={dumpLoading || !dumpText.trim() || dumpAlreadyProcessed} style={{ flex:2, padding:"12px" }}>
                 {dumpLoading ? "⏳ AIが整理中..." : "✨ AIで整理する"}
               </Btn>
               <Btn variant="ghost" onClick={clearDump} disabled={dumpLoading || !dumpText} style={{ flex:1, padding:"12px" }}>🗑 クリア</Btn>

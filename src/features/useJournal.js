@@ -26,6 +26,7 @@ export function useJournal({ settings, goals }) {
 
   const [dumpText, setDumpText] = useState("今日はとても疲れた。明日は午前中に資料作成を終わらせて、午後から新しい技術の勉強をする。毎日寝る前にストレッチをする習慣をつけたい。");
   const [dumpLoading, setDumpLoading] = useState(false);
+  const [lastProcessedDumpText, setLastProcessedDumpText] = useState(null);
   const [showDump, setShowDump] = useState(false);
   // 稼働シーケンスは初期状態では畳んでおき、ダンプ整理の直後に開く（入力への報酬としての見せ方）
   const [showSequence, setShowSequence] = useState(false);
@@ -143,14 +144,25 @@ export function useJournal({ settings, goals }) {
   // ─── ダンプ整理 ───
   const runDumpProcess = async () => {
     if (!dumpText.trim()) { alert("ダンプ内容を入力してください"); return; }
+    if (dumpText === lastProcessedDumpText) return;
+    const requestedDumpText = dumpText;
     setDumpLoading(true);
     try {
-      const result = await dumpProcess(dumpText, form, goals, fields);
-      const newForm = {};
-      for (const f of fields) newForm[f.key] = result[f.key] || form[f.key] || "";
+      const result = await dumpProcess(requestedDumpText, form, goals, fields);
+      const newForm = { ...formRef.current };
+      for (const f of fields) {
+        const delta = result[f.key] || "";
+        const existing = formRef.current[f.key] || "";
+        // AIの書き落としがそのままユーザーの記述の消失になるため、既存には触れない。
+        newForm[f.key] = !delta ? existing
+          : !existing ? delta
+          : existing.includes(delta) ? existing
+          : `${existing},${delta}`;
+      }
       setForm(newForm);
       dirtyRef.current = false;
       saveEntryState(newForm);
+      setLastProcessedDumpText(requestedDumpText);
       showToast();
       setShowSequence(true);   // 整理できた実感として稼働シーケンスを開く
 
@@ -179,7 +191,9 @@ export function useJournal({ settings, goals }) {
 
   return {
     entries, setEntries, form, setForm, selDate, setSelDate, saved,
-    dumpText, setDumpText, dumpLoading, showDump, setShowDump,
+    dumpText, setDumpText, dumpLoading,
+    dumpAlreadyProcessed: lastProcessedDumpText !== null && dumpText === lastProcessedDumpText,
+    showDump, setShowDump,
     showSequence, setShowSequence,
     showSaveToast, hideToast, proposedTodos, setProposedTodos,
     updateField, saveEntry, runDumpProcess, clearDump,

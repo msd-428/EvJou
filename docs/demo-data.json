@@ -1,0 +1,366 @@
+{
+  "version": 1,
+  "exportedAt": "2026-09-01T23:00:00.000Z",
+  "entries": {
+    "2026-08-20": {
+      "grateful": "朝いちで頭の中を全部出せた",
+      "todayGoal": "週次の議題を3つに絞る／見積りの確認／夕方に振り返り",
+      "tomorrowGoal": "朝会の進め方を決める",
+      "memo": "考えすぎる前に手を動かせた日。夜は早めに切り上げた"
+    },
+    "2026-08-21": {
+      "grateful": "差し込みが少なく集中できた",
+      "todayGoal": "提案資料の骨子をつくる／請求まわりの確認",
+      "tomorrowGoal": "資料のレビューを依頼する",
+      "memo": "午前に難しいものを置くと後が楽になる"
+    },
+    "2026-08-22": {
+      "grateful": "相談に来てくれた人がいた",
+      "todayGoal": "採用面談の準備／来期の数字をざっと出す",
+      "tomorrowGoal": "面談のフィードバックをまとめる",
+      "memo": "人の話を聞く日は自分の作業を詰め込みすぎない"
+    },
+    "2026-08-23": {
+      "grateful": "雨で予定が空いて助かった",
+      "todayGoal": "溜まっていた承認をまとめて片づける",
+      "tomorrowGoal": "月次のまとめを書き始める",
+      "memo": "承認待ちが減ると気持ちが軽い"
+    },
+    "2026-08-24": {
+      "grateful": "昼に散歩へ出られた",
+      "todayGoal": "月次のまとめを書く／来週の予定を組む",
+      "tomorrowGoal": "まとめを共有する",
+      "memo": "歩くと考えがほどける"
+    },
+    "2026-08-25": {
+      "grateful": "朝の時間を守れた",
+      "todayGoal": "共有会の資料をつくる／問い合わせの返信",
+      "tomorrowGoal": "共有会を回す",
+      "memo": "資料は完璧を狙わず、話す順番だけ決めた"
+    },
+    "2026-08-26": {
+      "grateful": "共有会がうまく回った",
+      "todayGoal": "議事のまとめ／宿題の割り振り",
+      "tomorrowGoal": "宿題の進み具合を確認する",
+      "memo": "決まったことより、決め方が整った感じがある"
+    },
+    "2026-08-27": {
+      "grateful": "体調が戻ってきた",
+      "todayGoal": "見積りの見直し／来月の段取り",
+      "tomorrowGoal": "段取りを共有する",
+      "memo": "無理をしなかったのが効いた"
+    },
+    "2026-08-28": {
+      "grateful": "朝の30分が定着してきた",
+      "todayGoal": "来月の段取りを詰める／棚卸し",
+      "tomorrowGoal": "棚卸しの結果を整理する",
+      "memo": "続けていると、書く量が自然に減ってきた"
+    },
+    "2026-08-29": {
+      "grateful": "手が空いた時間に本を読めた",
+      "todayGoal": "読んだ内容を要点にする／請求の締め",
+      "tomorrowGoal": "要点を共有する",
+      "memo": "インプットの時間を予定に置くとちゃんと取れる"
+    },
+    "2026-08-30": {
+      "grateful": "気温が下がって過ごしやすい",
+      "todayGoal": "四半期の振り返りを書く",
+      "tomorrowGoal": "振り返りをもとに来期の柱を決める",
+      "memo": "振り返りは朝にやると素直に書ける"
+    },
+    "2026-08-31": {
+      "grateful": "振り返りが思ったより進んだ",
+      "todayGoal": "来期の柱を3つに絞る／面談の日程調整",
+      "tomorrowGoal": "柱について意見をもらう",
+      "memo": "3つに絞ると迷いが減る"
+    },
+    "2026-09-01": {
+      "grateful": "意見をもらえて視点が増えた",
+      "todayGoal": "もらった意見を反映する／請求の確認",
+      "tomorrowGoal": "反映した案をまとめる",
+      "memo": "自分だけで決めきらないほうが早い"
+    },
+    "2026-09-02": {
+      "grateful": "朝から頭が軽い",
+      "todayGoal": "案をまとめる／午後は詰まっている件をほどく",
+      "tomorrowGoal": "詰まっている件の次の一手を決める",
+      "memo": "散らかっていた頭を先に出したのが良かった"
+    }
+  },
+  "goals": {
+    "bigGoal": "一年後、自分がいなくてもチームが回る状態をつくる",
+    "midGoal": "今期中に、週次の意思決定を仕組みに落とす",
+    "nearGoal": "今週は、朝の30分を思考の整理に固定する"
+  },
+  "todos": [
+    {
+      "id": "demo-001",
+      "text": "週次の議題を3つに絞る",
+      "done": true,
+      "source": "ai-today",
+      "createdAt": "2026-09-02",
+      "dueDate": "2026-09-02"
+    },
+    {
+      "id": "demo-002",
+      "text": "見積りの数字を確認する",
+      "done": true,
+      "source": "ai-today",
+      "createdAt": "2026-09-02",
+      "dueDate": "2026-09-02"
+    },
+    {
+      "id": "demo-003",
+      "text": "提案資料の骨子をつくる",
+      "done": false,
+      "source": "ai-today",
+      "createdAt": "2026-09-02",
+      "dueDate": "2026-09-02"
+    },
+    {
+      "id": "demo-004",
+      "text": "詰まっている件の次の一手を決める",
+      "done": false,
+      "source": "ai-today",
+      "createdAt": "2026-09-02",
+      "dueDate": "2026-09-02"
+    },
+    {
+      "id": "demo-005",
+      "text": "夕方に今日の振り返りを書く",
+      "done": false,
+      "source": "ai-today",
+      "createdAt": "2026-09-02",
+      "dueDate": "2026-09-02"
+    },
+    {
+      "id": "demo-006",
+      "text": "面談の日程を調整する",
+      "done": false,
+      "source": "ai-tomorrow",
+      "createdAt": "2026-09-03",
+      "dueDate": "2026-09-03"
+    },
+    {
+      "id": "demo-007",
+      "text": "反映した案をまとめる",
+      "done": false,
+      "source": "ai-tomorrow",
+      "createdAt": "2026-09-03",
+      "dueDate": "2026-09-03"
+    },
+    {
+      "id": "demo-008",
+      "text": "読んだ本の要点をメモに残す",
+      "done": false,
+      "source": "manual",
+      "createdAt": "2026-09-02",
+      "dueDate": null
+    }
+  ],
+  "routines": {
+    "active": [
+      {
+        "id": "demo-009",
+        "text": "7時に起きる",
+        "schedule": {
+          "type": "daily"
+        }
+      },
+      {
+        "id": "demo-010",
+        "text": "朝の30分で頭の中を書き出す",
+        "schedule": {
+          "type": "daily"
+        }
+      },
+      {
+        "id": "demo-011",
+        "text": "寝る前に明日の3つを決める",
+        "schedule": {
+          "type": "daily"
+        }
+      },
+      {
+        "id": "demo-012",
+        "text": "週に3回は歩く",
+        "schedule": {
+          "type": "weekly",
+          "days": [
+            1,
+            3,
+            5
+          ]
+        }
+      }
+    ],
+    "done": []
+  },
+  "routineChecks": {
+    "2026-08-20": {
+      "demo-009": true,
+      "demo-010": true,
+      "demo-012": true
+    },
+    "2026-08-21": {
+      "demo-009": true,
+      "demo-010": true,
+      "demo-011": true
+    },
+    "2026-08-22": {
+      "demo-009": true,
+      "demo-010": true,
+      "demo-011": true,
+      "demo-012": true
+    },
+    "2026-08-23": {
+      "demo-010": true,
+      "demo-011": true,
+      "demo-012": true
+    },
+    "2026-08-24": {
+      "demo-009": true,
+      "demo-011": true,
+      "demo-012": true
+    },
+    "2026-08-25": {
+      "demo-009": true,
+      "demo-010": true,
+      "demo-012": true
+    },
+    "2026-08-26": {
+      "demo-009": true,
+      "demo-010": true,
+      "demo-011": true
+    },
+    "2026-08-27": {
+      "demo-009": true,
+      "demo-010": true,
+      "demo-011": true,
+      "demo-012": true
+    },
+    "2026-08-28": {
+      "demo-010": true,
+      "demo-011": true,
+      "demo-012": true
+    },
+    "2026-08-29": {
+      "demo-009": true,
+      "demo-011": true,
+      "demo-012": true
+    },
+    "2026-08-30": {
+      "demo-009": true,
+      "demo-010": true,
+      "demo-012": true
+    },
+    "2026-08-31": {
+      "demo-009": true,
+      "demo-010": true,
+      "demo-011": true
+    },
+    "2026-09-01": {
+      "demo-009": true,
+      "demo-010": true,
+      "demo-011": true,
+      "demo-012": true
+    },
+    "2026-09-02": {
+      "demo-010": true,
+      "demo-011": true,
+      "demo-012": true
+    }
+  },
+  "baseList": [
+    {
+      "id": "demo-013",
+      "name": "平日の型",
+      "note": "午前は考える仕事、午後は人と話す",
+      "blocks": [
+        {
+          "time": "07:00",
+          "label": "起床・ストレッチ",
+          "note": "",
+          "fixed": true
+        },
+        {
+          "time": "07:30",
+          "label": "ダンプ（頭の整理）",
+          "note": "今日の3つを決める",
+          "fixed": true
+        },
+        {
+          "time": "09:00",
+          "label": "集中作業",
+          "note": "いちばん重いものから",
+          "fixed": false
+        },
+        {
+          "time": "12:00",
+          "label": "昼休み",
+          "note": "",
+          "fixed": true
+        },
+        {
+          "time": "13:00",
+          "label": "打ち合わせ・相談",
+          "note": "",
+          "fixed": false
+        },
+        {
+          "time": "17:00",
+          "label": "振り返り",
+          "note": "できたことを先に書く",
+          "fixed": true
+        }
+      ]
+    }
+  ],
+  "activeBaseId": "demo-013",
+  "generatedScheds": {
+    "2026-09-02": [
+      {
+        "time": "07:00",
+        "label": "起床・ストレッチ",
+        "note": "",
+        "fixed": true
+      },
+      {
+        "time": "07:30",
+        "label": "ダンプ（頭の整理）",
+        "note": "散らかった順に出す",
+        "fixed": true
+      },
+      {
+        "time": "09:00",
+        "label": "提案資料の骨子をつくる",
+        "note": "朝のうちに形にする",
+        "fixed": false
+      },
+      {
+        "time": "11:00",
+        "label": "見積りの数字を確認する",
+        "note": "",
+        "fixed": false
+      },
+      {
+        "time": "12:00",
+        "label": "昼休み",
+        "note": "",
+        "fixed": true
+      },
+      {
+        "time": "13:30",
+        "label": "詰まっている件をほどく",
+        "note": "人に聞く前提で",
+        "fixed": false
+      },
+      {
+        "time": "17:00",
+        "label": "夕方に今日の振り返りを書く",
+        "note": "",
+        "fixed": true
+      }
+    ]
+  }
+}
